@@ -1,0 +1,41 @@
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*secret*
+*credential*
+*token*
+*.pem
+*.pfx
+*.key
+
+# Logs, databases, and runtime data
+*.log
+*.sql
+*.sqlite
+*.sqlite3
+cache/
+**/cache/
+logs/
+tmp/
+temp/
+
+# Dependencies and generated output
+node_modules/
+build/
+dist/
+.cache/
+coverage/
+__pycache__/
+*.py[cod]
+
+# Editor and OS files
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
