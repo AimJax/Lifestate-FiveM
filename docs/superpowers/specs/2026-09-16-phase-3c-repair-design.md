@@ -22,7 +22,7 @@ No Phase 3D/App Store work, automatic reconciliation worker, destructive table r
 
 ## Idempotent terminalization
 
-One function owns terminal transitions; callers never pre-set a terminal status. It conditionally persists the final result, applies one-time completion statistics transactionally, sets runtime state, notifies customer and former driver, stops timers/search, retracts offers, clears mappings/busy state, removes the live ride, and republishes the former driver's online availability.
+One function owns terminal transitions; callers never pre-set a terminal status. It conditionally persists the final result, applies one-time completion statistics transactionally, sets runtime state, notifies customer and former driver, stops timers/search, retracts offers, clears mappings/busy state, removes the live ride, and republishes the former driver's online availability. `COMPLETED` has a hard invariant: terminalization itself must verify that the ride's fare ledger is durably `paid`; otherwise it fails without changing ride state or cleanup. Callers cannot bypass this check by claiming payment succeeded.
 
 A persisted terminalization marker/result prevents repeated cleanup, statistics, payment, or notifications. Re-entry returns the existing result safely.
 
@@ -55,7 +55,10 @@ Fare order remains customer debit, driver credit, company credit. Confirmed fail
 - Fully confirmed rollback becomes `rolled_back` and payment returns to retryable `pending`.
 - Any failed or ambiguous rollback becomes `needs_reconciliation` and blocks retries.
 - A paid ledger returns success without moving money again.
-- Failures before/after paid confirmation use the same verified rollback or quarantine path.
+- A failure before the overall `paid` confirmation uses the same verified rollback or quarantine path unless every required money step is already durably `applied`.
+- When customer debit, driver credit, and company credit are all durably `applied`, failure to write the overall `paid` status is financially complete but administratively unfinished. The ledger is quarantined as `needs_reconciliation` with a finalization-specific failed step; no wallet rollback or replay is allowed.
+- On restart or re-entry, an all-`applied` ledger may run only the DB finalization that marks it `paid`. It must not call any wallet or company money operation.
+- Any individual step left in `processing` remains ambiguous and is quarantined; it is never inferred as applied and never automatically retried.
 
 This cannot remove the external-wallet/SQL crash window, but it makes ambiguity explicit and non-replayable.
 
