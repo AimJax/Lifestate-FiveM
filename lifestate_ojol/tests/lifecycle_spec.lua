@@ -1,7 +1,7 @@
 local h = require 'tests.harness'
 local paid, finalized = false, 0
 
-for _, name in ipairs({ 'server.rides', 'config.server', 'config.shared', 'server.database',
+for _, name in ipairs({ 'server.rides', 'server.roadsnap', 'config.server', 'config.shared', 'server.database',
     'server.drivers', 'server.fares', 'server.payments', 'server.vehicles' }) do
     package.loaded[name] = nil
 end
@@ -23,6 +23,7 @@ package.preload['server.vehicles'] = function() return {} end
 function AddEventHandler() end
 function TriggerEvent() end
 function TriggerClientEvent() end
+function RegisterNetEvent() end
 function ClearTimeout() end
 function SetTimeout() return 1 end
 

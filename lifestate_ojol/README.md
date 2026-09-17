@@ -101,8 +101,12 @@ Every precondition is re-checked inside the lock.
 **Persistence first, runtime second.** Anything that changes who owns a ride writes the database
 before it touches runtime state:
 
-- acceptance persists the winning driver first; a failed write aborts the accept (`database_error`)
-  with no assignment, no `busy` flag, no location stream and no `rideAssigned` event;
+- acceptance persists the winning driver first, as a database-side compare-and-set: `db.AcceptRide`
+  only matches a still-`SEARCHING`, still-unassigned row. A failed write aborts the accept with
+  `database_error`; a CAS that matches nothing (`affectedRows = 0`) is *never* treated as a
+  successful repeat - the persisted row is re-read and the accept is refused with
+  `order_already_taken` (adopting the terminal row) or `stale_assignment`. Neither path assigns a
+  driver, sets `busy`, starts a location stream or fires `rideAssigned`;
 - a driver release persists the reopen (plain, or recalculated after an after-pickup abandon) first;
   a refused write aborts the cancel and changes nothing - no statistic, no cooldown, no rematch;
 - when a write that should have moved the row instead affects nothing, the persisted status is
@@ -117,6 +121,28 @@ step is still `processing` (the write was lost and money may have moved) or a fo
 `applied` without its rollback confirmed. `payments.ResetFareLedgerForRetry` /
 `ResetCompensationLedgerForRetry` expose it. Replays never double-charge: the ledger's affected-rows
 count is the idempotency guard, and a ride only becomes `COMPLETED` once its fare ledger is `paid`.
+
+**The road-snap round trip is bounded.** Resolving an after-pickup recovery pickup needs a client
+(the road-node natives exist only there), so `server/roadsnap.lua` issues a one-shot request with a
+deadline (`serverConfig.roadSnapTimeoutMs`) and a single promise. It settles on exactly one of the
+answer, the deadline (`road_snap_timeout`) or the customer dropping (`customer_offline`), so the
+ride's lifecycle lock can never be held longer than that: an unresponsive client can delay one ride
+but never wedge it. The answer is only ever a *candidate* - the point must be finite and inside the
+map, and within `config.shared.maxPickupSnapMeters` of the position the server itself reads for that
+ped, re-read after the round trip. There is deliberately **no fallback to the raw ped coordinate**: a
+recovery that cannot obtain a trustworthy road point closes the ride as `FAILED` rather than
+restarting it from an untrusted position. Late, duplicate and spoofed answers are ignored (a settled
+request leaves the pending table, the reply must come from the source it was sent to, and its
+request id must still be in flight); in-flight requests are dropped on `playerDropped` and at
+resource stop.
+
+**A completion result is confirmed against storage.** `db.FinalizeRide` for `COMPLETED` runs in a SQL
+transaction, and a committed transaction is not the same thing as a moved row: both statements carry
+the `status NOT IN (terminal)` guard, so a ride somebody else already closed commits while affecting
+nothing. The persisted status is therefore read back and the call reports `0` unless the row really
+is `COMPLETED` - otherwise the caller would finalize the runtime ride while storage says the customer
+cancelled. An identical repeat (the row is already `COMPLETED`) still reports `1`, so re-entry stays
+idempotent.
 
 Road-snapped recovery points are still proposed by the customer's client (CfxLua exposes road nodes
 only on the client) but must be sane and within `maxPickupSnapMeters` of the position the server

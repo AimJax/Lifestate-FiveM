@@ -56,4 +56,11 @@ return {
     -- Customer's live driver marker: one re-arming timer per assigned ride,
     -- destroyed immediately when the ride stops being active.
     driverLocationStreamMs = 2500,
+
+    -- Bound on the client round trip that resolves an after-pickup recovery
+    -- pickup (road nodes exist only on the client). The ride's lifecycle lock is
+    -- only ever held for at most this long, so an unresponsive client can delay
+    -- that one ride - never wedge it. On expiry the recovery fails safely
+    -- instead of falling back to untrusted coordinates.
+    roadSnapTimeoutMs = 3000,
 }

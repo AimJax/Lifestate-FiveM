@@ -19,6 +19,7 @@ local db = require 'server.database'
 local drivers = require 'server.drivers'
 local fares = require 'server.fares'
 local payments = require 'server.payments'
+local roadsnap = require 'server.roadsnap'
 local bikes = require 'server.vehicles'
 
 local M = {}
@@ -633,16 +634,62 @@ function M.CreateRide(customerCitizenid, pickup, destination, paymentMethod)
     return true, ride
 end
 
+---Storage refused the assignment compare-and-set, which means the database
+---disagrees with the runtime view of this ride. Work out what storage actually
+---holds, adopt a terminal outcome when that is what it says, and never leave
+---anything half-assigned.
+---
+---The caller has not touched a single runtime field at this point, so every
+---rejection path is safe by construction: no busy flag, no DriverActiveRide
+---entry, no location stream, no rideAssigned event, and the driver's offer is
+---left exactly as matching recorded it.
+---@param ride table
+---@param rideId string
+---@return boolean ok, string? reason
+local function rejectAcceptCas(ride, rideId)
+    local probeOk, row = pcall(db.FetchRideAssignment, rideId)
+    if not probeOk then return false, 'database_error' end
+
+    if not row then
+        -- No durable request left to assign against. The runtime ride is not
+        -- usable, so this is a storage fault rather than a missing-order case.
+        print(('[ojol] accept rejected for ride %s: no persisted row'):format(tostring(rideId)))
+        return false, 'database_error'
+    end
+
+    if row.status and TERMINAL[row.status] then
+        print(('[ojol] accept rejected for ride %s: storage holds %s')
+            :format(tostring(rideId), tostring(row.status)))
+
+        -- Reconcile the runtime with the finished row the same way every other
+        -- write-refused path does, so the ride does not stay live in memory.
+        M.AdoptPersistedTerminalState(ride)
+        return false, 'order_already_taken'
+    end
+
+    if row.driver_citizenid then
+        print(('[ojol] accept rejected for ride %s: storage already names a driver'):format(tostring(rideId)))
+        return false, 'order_already_taken'
+    end
+
+    -- Unassigned and non-terminal, yet the compare-and-set matched nothing: the
+    -- row moved under us. Refuse rather than guess; matching may offer it again.
+    print(('[ojol] accept rejected for ride %s: storage did not match the expected state')
+        :format(tostring(rideId)))
+    return false, 'stale_assignment'
+end
+
 ---Acceptance body. Runs inside the per-ride lifecycle lock, which is the SAME
 ---lock cancellation and completion take, so an accept can never land while a
 ---cancellation owns the ride - and vice versa. Every precondition is re-checked
 ---here; whatever eligibility the caller checked before is advisory only.
 ---
----Ordering is deliberate: the DATABASE owns the assignment. The runtime is only
----advanced once the durable row names the driver, so a failed write can never
----leave the server believing a ride is assigned while storage says it is still
----searching. Nothing is registered as busy, no location stream starts and no
----rideAssigned event fires on a write failure.
+---Ordering is deliberate: the DATABASE owns the assignment, and it owns it as an
+---atomic compare-and-set (only a still-SEARCHING, still-unassigned row can be
+---won). The runtime is advanced only after that row names this driver, so a
+---failed or refused write can never leave the server believing a ride is
+---assigned while storage says otherwise. Nothing is registered as busy, no
+---location stream starts and no rideAssigned event fires when the CAS loses.
 ---@param rideId string
 ---@param driverCitizenid string
 ---@return boolean ok, string? reason
@@ -658,12 +705,15 @@ local function acceptRideUnlocked(rideId, driverCitizenid)
 
     local acceptedAt = os.time()
     local persisted, affected = pcall(db.AcceptRide, rideId, driverCitizenid, acceptedAt)
-    if not persisted or not affected or affected == 0 then
-        -- Runtime untouched, so runtime and database still agree: the ride stays
-        -- SEARCHING and matching may still offer it to someone else.
-        print(('[ojol] driver assignment not persisted for ride %s - accept aborted')
-            :format(tostring(rideId)))
+    if not persisted then
+        print(('[ojol] driver assignment failed for ride %s - accept aborted'):format(tostring(rideId)))
         return false, 'database_error'
+    end
+
+    if not affected or affected == 0 then
+        -- The database-side compare-and-set rejected us: storage disagrees with
+        -- the runtime view of this ride. Nothing runtime-side has changed yet.
+        return rejectAcceptCas(ride, rideId)
     end
 
     -- Point of no return: the row names this driver.
@@ -766,14 +816,16 @@ local function prepareAbandonRecovery(ride)
     local customerCoords = drivers.GetPlayerCoordsByCitizenid(ride.customerCitizenid)
     if not customerCoords then return nil, 'customer_offline' end
 
-    local customerSource = drivers.SourceByCitizenid[ride.customerCitizenid]
-    if not customerSource then return nil, 'customer_offline' end
+    -- Bounded round trip: roadsnap always settles - on the answer, on the
+    -- deadline or on the customer dropping - so this ride's lifecycle lock can
+    -- never be held indefinitely by an unresponsive client.
+    local proposed, reason = roadsnap.Request(ride.customerCitizenid, serverConfig.roadSnapTimeoutMs)
+    if not proposed then return nil, reason or 'unsafe_recovery_pickup' end
 
-    local requestOk, proposed = pcall(function()
-        return lib.callback.await('lifestate_ojol:client:getRoadPickup', customerSource)
-    end)
-
-    if not requestOk or not isSanePoint(proposed) then return nil, 'unsafe_recovery_pickup' end
+    -- The answer is only a candidate: the point must still be sane and next to
+    -- the position the server itself sees for that ped, re-read now (the
+    -- customer may have moved during the round trip).
+    if not isSanePoint(proposed) then return nil, 'unsafe_recovery_pickup' end
 
     if horizontalDistance(proposed, customerCoords) > sharedConfig.maxPickupSnapMeters then
         return nil, 'unsafe_recovery_pickup'

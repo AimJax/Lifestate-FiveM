@@ -1,7 +1,7 @@
 local h = require 'tests.harness'
 local existingRating, transactionResult, recoveredRow
 
-for _, name in ipairs({ 'server.rides', 'config.server', 'config.shared', 'server.database',
+for _, name in ipairs({ 'server.rides', 'server.roadsnap', 'config.server', 'config.shared', 'server.database',
     'server.drivers', 'server.fares', 'server.payments', 'server.vehicles' }) do
     package.loaded[name] = nil
 end
@@ -33,6 +33,9 @@ package.preload['server.fares'] = function()
 end
 package.preload['server.payments'] = function() return {} end
 package.preload['server.vehicles'] = function() return {} end
+
+-- server/roadsnap.lua registers its response handler as it loads.
+function RegisterNetEvent() end
 
 local rides = require 'server.rides'
 

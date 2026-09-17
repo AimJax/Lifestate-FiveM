@@ -8,6 +8,7 @@ local bikes = require 'server.vehicles'
 local rides = require 'server.rides'
 local matching = require 'server.matching'
 local payments = require 'server.payments'
+local roadsnap = require 'server.roadsnap'
 
 -- Validation helpers --------------------------------------------------------
 
@@ -667,6 +668,11 @@ AddEventHandler('playerDropped', function()
         -- any more - drop availability before the ride system reacts to it.
         drivers.ClearOnlineState(citizenid)
 
+        -- Finish any road-snap round trip aimed at this player first: the ride
+        -- recovery waiting on it then closes out instead of sitting on its
+        -- deadline, so nothing outlives the session.
+        roadsnap.DropByCitizenid(citizenid)
+
         -- Ride cleanup runs before the source mapping is cleared: reopening a
         -- customer's request needs the dropping player's identity.
         rides.HandlePlayerDropped(citizenid)
@@ -692,4 +698,7 @@ AddEventHandler('onResourceStop', function(resName)
     -- Never leave a tier timer pointing at a ride that no longer exists.
     matching.Shutdown()
     rides.ShutdownStreams()
+
+    -- Drop every road-snap deadline timer; their coroutines go with the resource.
+    roadsnap.Shutdown()
 end)

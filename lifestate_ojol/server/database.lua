@@ -267,14 +267,39 @@ function M.InsertRide(ride)
 end
 
 ---Record the winning driver once a ride is accepted.
+---
+---This is an atomic compare-and-set, not a blind write: the row may only be
+---assigned while storage still considers it SEARCHING and unassigned. A stale
+---runtime view (a cancelled or completed row, or a row another driver already
+---won) therefore cannot be overwritten, so the database can never name a driver
+---for a ride it has already finished.
+---
+---affectedRows is the single source of truth for the caller:
+---  1 = this caller won the row and the assignment is durable
+---  0 = the ride was not actually available in storage (never a successful
+---      repeat, even if the values happen to match what is already stored)
 ---@param rideId string
 ---@param driverCitizenid string
 ---@param acceptedAt number
 ---@return number affectedRows
 function M.AcceptRide(rideId, driverCitizenid, acceptedAt)
-    return MySQL.update.await(
-        'UPDATE `ojol_rides` SET `driver_citizenid` = ?, `accepted_at` = ? WHERE `ride_id` = ?',
-        { driverCitizenid, acceptedAt, rideId })
+    return MySQL.update.await([[
+        UPDATE `ojol_rides`
+        SET `driver_citizenid` = ?, `accepted_at` = ?
+        WHERE `ride_id` = ?
+          AND `status` = 'SEARCHING'
+          AND `driver_citizenid` IS NULL
+    ]], { driverCitizenid, acceptedAt, rideId })
+end
+
+---Persisted ownership/state of a ride row. Used to explain a rejected
+---compare-and-set (or any write that should have moved the row) against what
+---storage actually holds.
+---@param rideId string
+---@return table? row { status, driver_citizenid }
+function M.FetchRideAssignment(rideId)
+    return MySQL.single.await(
+        'SELECT `status`, `driver_citizenid` FROM `ojol_rides` WHERE `ride_id` = ?', { rideId })
 end
 
 ---Record a terminal outcome for a ride. Called once per ride.
@@ -307,7 +332,15 @@ function M.FinalizeRide(ride, status)
                 values = { flag, now, ride.rideId, ('ride:%s:fare'):format(ride.rideId) },
             },
         })
-        return ok and 1 or 0
+        if not ok then return 0 end
+
+        -- A committed transaction is NOT the same thing as a moved row: both
+        -- statements carry the `status NOT IN (terminal)` guard, so a ride that
+        -- somebody else already closed commits happily while affecting nothing.
+        -- Confirm against storage, otherwise this call would report closing a
+        -- ride whose durable outcome is a different terminal state, and the
+        -- caller would finalize the runtime ride instead of reconciling it.
+        return M.FetchRideStatus(ride.rideId) == 'COMPLETED' and 1 or 0
     end
 
     return MySQL.update.await(

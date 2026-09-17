@@ -27,6 +27,7 @@ local function freshState()
         stats = {},
         compensationPaid = 0,
         roadPickup = { x = 120, y = 100, z = 30 },
+        roadSnapReason = nil,
         db = {},
     }
 end
@@ -53,14 +54,15 @@ local function installGlobals(state)
     function GetPlayerPed(source) return 100 + (tonumber(source) or 0) end
     function GetEntityCoords() return { x = 0, y = 0, z = 0 } end
 
-    -- Only the after-pickup recovery path calls out to a client (road nodes are
-    -- client-only). The value it answers with is fully controlled per test.
-    lib = { callback = { await = function() return state.roadPickup end } }
+    -- server/roadsnap.lua registers its response handler as it loads.
+    function RegisterNetEvent() end
 end
 
 local function loadRides(state)
-    for _, name in ipairs({ 'server.rides', 'config.server', 'config.shared', 'server.database',
-        'server.drivers', 'server.fares', 'server.payments', 'server.vehicles' }) do
+    -- server.roadsnap is cleared too: it binds 'server.drivers' as it loads, so a
+    -- cached copy would keep answering from an earlier test's state.
+    for _, name in ipairs({ 'server.rides', 'server.roadsnap', 'config.server', 'config.shared',
+        'server.database', 'server.drivers', 'server.fares', 'server.payments', 'server.vehicles' }) do
         package.loaded[name] = nil
     end
 
@@ -107,6 +109,10 @@ local function loadRides(state)
             FetchRideStatus = function(...)
                 if db.fetchRideStatus then return db.fetchRideStatus(...) end
                 return nil
+            end,
+            FetchRideAssignment = function(...)
+                if db.fetchRideAssignment then return db.fetchRideAssignment(...) end
+                return { status = 'SEARCHING', driver_citizenid = nil }
             end,
             IsFareLedgerPaid = function() return false end,
             IncrementDriverStat = function(_, column)
@@ -158,6 +164,22 @@ local function loadRides(state)
 
     package.preload['server.vehicles'] = function()
         return { HasValidBike = function() return false end }
+    end
+
+    -- The bounded client round trip that resolves an after-pickup recovery
+    -- pickup. The round trip itself (deadline, spoof/late/duplicate answers) is
+    -- exercised against the real module in roadsnap_spec.lua; here it is stubbed
+    -- so these specs can assert what rides.lua DOES with each outcome - the
+    -- point it receives, and the reason it fails with.
+    package.preload['server.roadsnap'] = function()
+        return {
+            Request = function()
+                if state.roadSnapReason then return nil, state.roadSnapReason end
+                return state.roadPickup
+            end,
+            DropByCitizenid = function() end,
+            Shutdown = function() end,
+        }
     end
 
     local rides = require 'server.rides'
@@ -274,9 +296,11 @@ h.test('a failed assignment write aborts the accept with no runtime change', fun
     local rides, drivers, state = setup()
     local ride = createRide(rides, state)
 
+    -- The write matched nothing while storage still looks unassigned and live:
+    -- the row moved under us, so the accept is refused rather than guessed.
     state.db.acceptRide = function() return 0 end
 
-    h.eq(select(2, rides.TryAcceptRide(ride.rideId, 'driver')), 'database_error', 'reason')
+    h.eq(select(2, rides.TryAcceptRide(ride.rideId, 'driver')), 'stale_assignment', 'reason')
     h.eq(ride.status, rides.STATES.SEARCHING, 'ride status')
     h.eq(ride.driverCitizenId, nil, 'runtime driver')
     h.eq(rides.DriverActiveRide.driver, nil, 'driver map')
@@ -288,6 +312,157 @@ h.test('a failed assignment write aborts the accept with no runtime change', fun
     state.db.acceptRide = function() return 1 end
     h.eq(select(1, rides.TryAcceptRide(ride.rideId, 'driver')), true, 'later accept')
     h.eq(ride.status, rides.STATES.DRIVER_ENROUTE, 'final status')
+end)
+
+-- Database compare-and-set -----------------------------------------------------
+--
+-- The assignment is a compare-and-set in storage: only a still-SEARCHING,
+-- still-unassigned row can be won. When it matches nothing, the runtime must not
+-- advance - and the persisted state decides what actually happened.
+
+h.test('an accept whose row is already terminal is refused and reconciled', function()
+    local rides, drivers, state = setup()
+    local ride = createRide(rides, state)
+
+    state.db.acceptRide = function() return 0 end
+    state.db.fetchRideAssignment = function()
+        return { status = 'CANCELLED_CUSTOMER', driver_citizenid = nil }
+    end
+    state.db.fetchRideStatus = function() return 'CANCELLED_CUSTOMER' end
+
+    local ok, reason = rides.TryAcceptRide(ride.rideId, 'driver')
+
+    h.eq(ok, false, 'accept result')
+    h.eq(reason, 'order_already_taken', 'reason')
+    h.eq(rides.DriverActiveRide.driver, nil, 'no runtime assignment')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver not busy')
+    h.eq(ride.status, rides.STATES.CANCELLED_CUSTOMER, 'runtime adopted the persisted state')
+    h.eq(rides.ActiveRides[ride.rideId], nil, 'ride no longer live')
+    h.eq(state.events['lifestate_ojol:server:rideAssigned'], nil, 'assignment event')
+    h.eq(state.events['lifestate_ojol:server:rideClosed'], 1, 'closure announced')
+end)
+
+h.test('an accept whose row storage completed is refused and reconciled', function()
+    local rides, drivers, state = setup()
+    local ride = createRide(rides, state)
+
+    state.db.acceptRide = function() return 0 end
+    state.db.fetchRideAssignment = function()
+        return { status = 'COMPLETED', driver_citizenid = 'driver-a' }
+    end
+    state.db.fetchRideStatus = function() return 'COMPLETED' end
+
+    h.eq(select(2, rides.TryAcceptRide(ride.rideId, 'driver')), 'order_already_taken', 'reason')
+    h.eq(rides.DriverActiveRide.driver, nil, 'no runtime assignment')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver not busy')
+    h.eq(ride.status, rides.STATES.COMPLETED, 'runtime adopted the persisted state')
+    h.eq(rides.ActiveRides[ride.rideId], nil, 'ride no longer live')
+    h.eq(state.events['lifestate_ojol:server:rideAssigned'], nil, 'assignment event')
+end)
+
+h.test('a storage error during the assignment write aborts the accept', function()
+    local rides, drivers, state = setup()
+    local ride = createRide(rides, state)
+
+    state.db.acceptRide = function() error('storage down') end
+
+    h.eq(select(2, rides.TryAcceptRide(ride.rideId, 'driver')), 'database_error', 'reason')
+    h.eq(ride.status, rides.STATES.SEARCHING, 'ride status')
+    h.eq(ride.driverCitizenId, nil, 'runtime driver')
+    h.eq(rides.DriverActiveRide.driver, nil, 'driver map')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver busy')
+    h.eq(rides.ActiveRides[ride.rideId], ride, 'ride still offered')
+    h.eq(state.events['lifestate_ojol:server:rideAssigned'], nil, 'assignment event')
+
+    -- The lifecycle lock was released, so a later attempt is not wedged behind it.
+    local _, again = rides.TryAcceptRide(ride.rideId, 'driver')
+    h.eq(again == 'ride_busy', false, 'lifecycle lock released')
+end)
+
+h.test('an accept whose row already names a driver is refused with no overwrite', function()
+    local rides, drivers, state = setup()
+    local ride = createRide(rides, state)
+
+    state.db.acceptRide = function() return 0 end
+    state.db.fetchRideAssignment = function()
+        return { status = 'SEARCHING', driver_citizenid = 'someone-else' }
+    end
+
+    local ok, reason = rides.TryAcceptRide(ride.rideId, 'driver')
+
+    h.eq(ok, false, 'accept result')
+    h.eq(reason, 'order_already_taken', 'reason')
+    h.eq(rides.DriverActiveRide.driver, nil, 'no runtime assignment')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver not busy')
+    h.eq(state.events['lifestate_ojol:server:rideAssigned'], nil, 'assignment event')
+
+    -- Still offerable: the losing accept consumed nothing.
+    h.eq(rides.ActiveRides[ride.rideId], ride, 'ride still live')
+end)
+
+h.test('an accept that storage cannot explain is refused as stale', function()
+    local rides, drivers, state = setup()
+    local ride = createRide(rides, state)
+
+    state.db.acceptRide = function() return 0 end
+    -- Unassigned and non-terminal, yet the compare-and-set matched nothing.
+    state.db.fetchRideAssignment = function()
+        return { status = 'SEARCHING', driver_citizenid = nil }
+    end
+
+    h.eq(select(2, rides.TryAcceptRide(ride.rideId, 'driver')), 'stale_assignment', 'reason')
+    h.eq(rides.DriverActiveRide.driver, nil, 'no runtime assignment')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver not busy')
+    h.eq(rides.ActiveRides[ride.rideId], ride, 'ride still live')
+end)
+
+h.test('an accept with no persisted row is a storage fault, not a missing order', function()
+    local rides, drivers, state = setup()
+    local ride = createRide(rides, state)
+
+    state.db.acceptRide = function() return 0 end
+    state.db.fetchRideAssignment = function() return nil end
+
+    h.eq(select(2, rides.TryAcceptRide(ride.rideId, 'driver')), 'database_error', 'reason')
+    h.eq(rides.DriverActiveRide.driver, nil, 'no runtime assignment')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver not busy')
+    h.eq(rides.ActiveRides[ride.rideId], ride, 'ride still live')
+end)
+
+h.test('an accept fails closed when the reconciliation query itself errors', function()
+    local rides, drivers, state = setup()
+    local ride = createRide(rides, state)
+
+    state.db.acceptRide = function() return 0 end
+    state.db.fetchRideAssignment = function() error('storage down') end
+
+    h.eq(select(2, rides.TryAcceptRide(ride.rideId, 'driver')), 'database_error', 'reason')
+    h.eq(rides.DriverActiveRide.driver, nil, 'no runtime assignment')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver not busy')
+    h.eq(rides.ActiveRides[ride.rideId], ride, 'ride still live')
+end)
+
+h.test('a refused accept does not consume the ride assignment state', function()
+    local rides, _, state = setup()
+    local ride = createRide(rides, state)
+
+    -- Storage holds a stale assignment owned by somebody else, then clears.
+    state.db.acceptRide = function() return 0 end
+    state.db.fetchRideAssignment = function()
+        return { status = 'SEARCHING', driver_citizenid = 'someone-else' }
+    end
+    h.eq(select(1, rides.TryAcceptRide(ride.rideId, 'driver')), false, 'refused accept')
+    h.eq(ride.driverCitizenId, nil, 'runtime driver untouched')
+
+    -- The stale row is released: the same ride can now be won normally.
+    state.db.acceptRide = function() return 1 end
+    state.db.fetchRideAssignment = function()
+        return { status = 'SEARCHING', driver_citizenid = nil }
+    end
+
+    h.eq(select(1, rides.TryAcceptRide(ride.rideId, 'driver')), true, 'legitimate accept')
+    h.eq(ride.status, rides.STATES.DRIVER_ENROUTE, 'final status')
+    h.eq(rides.DriverActiveRide.driver, ride.rideId, 'winning driver')
 end)
 
 -- Customer cancellation --------------------------------------------------------
@@ -424,6 +599,74 @@ h.test('a recovery point that is not sane fails the recovery', function()
     h.eq(ok, false, 'cancel result')
     h.eq(reason, 'unsafe_recovery_pickup', 'reason')
     h.eq(ride.status, rides.STATES.FAILED, 'ride closed')
+end)
+
+h.test('an unresponsive client fails the recovery instead of trusting raw ped coordinates', function()
+    local rides, drivers, state = setup()
+    local ride = acceptAndBoard(rides, state)
+
+    -- The deadline expired, so the bounded round trip produced no point at all.
+    -- There is deliberately no fallback to the customer's raw ped position.
+    state.roadSnapReason = 'road_snap_timeout'
+    state.players.customer = { x = 900, y = 900, z = 30 }
+
+    local rematches = dispatched(state, 'lifestate_ojol:server:rideSearching')
+    local ok, reason = rides.DriverCancel('driver', 'manual_driver_cancel')
+
+    h.eq(ok, false, 'cancel result')
+    h.eq(reason, 'road_snap_timeout', 'reason')
+    h.eq(ride.status, rides.STATES.FAILED, 'ride closed')
+    h.eq(ride.pickup.x, CUSTOMER.x, 'pickup never replaced with raw ped coordinates')
+    h.eq(ride.fare, 12000, 'locked fare untouched')
+    h.eq(rides.DriverActiveRide.driver, nil, 'driver released')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver not busy')
+    h.eq(dispatched(state, 'lifestate_ojol:server:rideSearching'), rematches, 'no rematch')
+    h.eq(#state.stats, 0, 'no cancellation statistic for a failed recovery')
+
+    -- The lifecycle lock was released, so the ride is not wedged behind it.
+    local _, again = rides.DriverCancel('driver', 'manual_driver_cancel')
+    h.eq(again == 'ride_busy', false, 'lifecycle lock released')
+end)
+
+h.test('a late recovery answer cannot resurrect a closed recovery', function()
+    local rides, drivers, state = setup()
+    local ride = acceptAndBoard(rides, state)
+
+    state.roadSnapReason = 'road_snap_timeout'
+    h.eq(select(1, rides.DriverCancel('driver', 'manual_driver_cancel')), false, 'cancel result')
+    h.eq(ride.status, rides.STATES.FAILED, 'ride closed')
+
+    -- The client answers after the deadline. The request no longer exists and the
+    -- ride is terminal, so the answer must change nothing at all.
+    state.roadSnapReason = nil
+    state.roadPickup = { x = 120, y = 100, z = 30 }
+
+    h.eq(ride.status, rides.STATES.FAILED, 'ride status')
+    h.eq(ride.pickup.x, CUSTOMER.x, 'pickup unchanged')
+    h.eq(rides.ActiveRides[ride.rideId], nil, 'ride registry')
+    h.eq(rides.DriverActiveRide.driver, nil, 'driver assignment')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver busy state')
+
+    local _, reason = rides.DriverCancel('driver', 'manual_driver_cancel')
+    h.eq(reason, 'no_ride', 'no recovery path remains open')
+end)
+
+h.test('a customer who drops during the recovery ends it safely', function()
+    local rides, drivers, state = setup()
+    local ride = acceptAndBoard(rides, state)
+
+    state.roadSnapReason = 'customer_offline'
+
+    local rematches = dispatched(state, 'lifestate_ojol:server:rideSearching')
+    local ok, reason = rides.DriverCancel('driver', 'manual_driver_cancel')
+
+    h.eq(ok, false, 'cancel result')
+    h.eq(reason, 'customer_offline', 'reason')
+    h.eq(ride.status, rides.STATES.FAILED, 'ride closed')
+    h.eq(rides.DriverActiveRide.driver, nil, 'driver released')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver not busy')
+    h.eq(dispatched(state, 'lifestate_ojol:server:rideSearching'), rematches, 'no rematch')
+    h.eq(#state.stats, 0, 'no cancellation statistic')
 end)
 
 -- Runtime / database divergence ------------------------------------------------

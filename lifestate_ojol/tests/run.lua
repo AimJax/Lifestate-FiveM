@@ -7,4 +7,6 @@ require 'tests.payment_retry_spec'
 require 'tests.lifecycle_spec'
 require 'tests.rating_spec'
 require 'tests.concurrency_spec'
+require 'tests.accept_cas_spec'
+require 'tests.roadsnap_spec'
 h.finish()

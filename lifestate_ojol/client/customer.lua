@@ -122,11 +122,21 @@ RegisterNetEvent('lifestate_ojol:client:customerRideChanged', function(view)
     end
 end)
 
-lib.callback.register('lifestate_ojol:client:getRoadPickup', function()
+---Answer a server road-snap request (bounded request/response). The server owns
+---the deadline, so this only has to reply once: no state is kept here, and a
+---missing reply costs the server nothing but its timeout.
+RegisterNetEvent('lifestate_ojol:client:requestRoadPickup', function(requestId)
+    if type(requestId) ~= 'string' then return end
+
     local coords = GetEntityCoords(PlayerPedId())
     local node = snapToRoad(coords.x, coords.y, coords.z)
-    if not node or horizontalDistance(node, coords) > sharedConfig.maxPickupSnapMeters then return nil end
-    return { x = node.x + 0.0, y = node.y + 0.0, z = node.z + 0.0 }
+
+    local point
+    if node and horizontalDistance(node, coords) <= sharedConfig.maxPickupSnapMeters then
+        point = { x = node.x + 0.0, y = node.y + 0.0, z = node.z + 0.0 }
+    end
+
+    TriggerServerEvent('lifestate_ojol:server:roadPickupResponse', requestId, point)
 end)
 
 AddEventHandler('onResourceStop', function(resourceName)
