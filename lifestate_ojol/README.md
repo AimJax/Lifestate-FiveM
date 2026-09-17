@@ -65,7 +65,8 @@ Server-pushed client events: `driverStateChanged`, `driverOfferChanged`, `driver
 
 - Customer cancels: free (Rp0) while searching or before the driver has made meaningful progress.
   Eligibility for the Rp5.000 company-paid driver compensation needs >= 30 s since acceptance **and**
-  >= 150 m of movement towards the pickup. The flag is stored on the ride; the transfer is Phase 3C.
+  >= 150 m of movement towards the pickup. The transfer runs only after the cancellation is durably
+  recorded, and the ride's money ledger makes it once-only.
 - Driver cancels before pickup: the ride reopens unchanged (same id, pickup, destination, fare and
   payment method) and rematching starts; the driver takes the cancel statistic and a hidden 5-minute
   cooldown against that customer. Cooldowns expire lazily - no cleanup loop.
@@ -87,13 +88,53 @@ or a drop never counts against them. Rematching is identical for every origin: t
 reopens on the same ride and the driver is freed (`rides.DriverCancel(..., origin)`, with
 `matching` re-checking the origin before it creates a cooldown).
 
+## Consistency, locking and retry guarantees
+
+Three rules keep the runtime and the database from ever disagreeing, and keep a failed money
+operation retryable instead of stuck.
+
+**One lifecycle lock per ride.** Acceptance, cancellation and completion all run through
+`rides.WithRideLock`. There is no separate accept lock, so an accept can never land while a
+cancellation owns the ride (it is refused with `ride_busy`) and two accepts can never both win.
+Every precondition is re-checked inside the lock.
+
+**Persistence first, runtime second.** Anything that changes who owns a ride writes the database
+before it touches runtime state:
+
+- acceptance persists the winning driver first; a failed write aborts the accept (`database_error`)
+  with no assignment, no `busy` flag, no location stream and no `rideAssigned` event;
+- a driver release persists the reopen (plain, or recalculated after an after-pickup abandon) first;
+  a refused write aborts the cancel and changes nothing - no statistic, no cooldown, no rematch;
+- when a write that should have moved the row instead affects nothing, the persisted status is
+  re-read and adopted (`rides.AdoptPersistedTerminalState`), so a row the database considers closed
+  is never left alive in memory.
+
+**Money ledgers are retry-safe.** A payment attempt that failed cleanly (nothing moved) or was fully
+rolled back is returned to a runnable state by `db.ResetMoneyLedgerForRetry` before the next
+attempt, so a customer who tops up can complete the same ride. The reset is a single guarded
+statement and refuses - quarantining the ledger as `needs_reconciliation` instead - whenever any
+step is still `processing` (the write was lost and money may have moved) or a forward step is
+`applied` without its rollback confirmed. `payments.ResetFareLedgerForRetry` /
+`ResetCompensationLedgerForRetry` expose it. Replays never double-charge: the ledger's affected-rows
+count is the idempotency guard, and a ride only becomes `COMPLETED` once its fare ledger is `paid`.
+
+Road-snapped recovery points are still proposed by the customer's client (CfxLua exposes road nodes
+only on the client) but must be sane and within `maxPickupSnapMeters` of the position the server
+itself sees for that ped. There is deliberately no fallback to the raw ped coordinate: if no
+trustworthy road point exists, the recovery fails and the ride is closed instead.
+
 ## Database
 
 Tables are created automatically on resource start (idempotent). Reference schema: `sql/ojol.sql`.
 
 - `ojol_drivers` - persistent registration + ride statistics (PK: `citizenid`).
-- `ojol_company` - single-row company balance in integer Rupiah (PK: `id`).
+- `ojol_company` - single-row company balance in integer Rupiah (PK: `id`). Negative balances are
+  allowed by design: owed compensation is paid rather than blocked (signed `BIGINT` migration).
 - `ojol_rides` - finalized ride history (PK: `ride_id`; indexes on customer, driver, status, created_at).
+- `ojol_ratings` - one rating per completed ride (PK: `ride_id`).
+- `ojol_money_ledger` - durable per-ride fare/compensation ledger (PK: `ledger_id`; indexes on
+  `ride_id`, `status`). `status` is `pending` / `processing` / `failed` / `rolled_back` / `paid` /
+  `needs_reconciliation`.
 - `lifestate_phone_apps` - per-player installed app state for the future App Store (PK: `citizenid`, `app_id`).
 
 Live ride state is never written per tick; only creation, acceptance and the terminal outcome.

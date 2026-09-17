@@ -461,11 +461,34 @@ local function detach(ride)
     M.ActiveRides[ride.rideId] = nil
 end
 
+---Everything that happens once a ride is durably terminal: notify both sides,
+---announce the closure and free every runtime slot the ride held.
+---@param ride table
+---@param status string terminal status
+local function finishRide(ride, status)
+    local previousDriver = ride.driverCitizenId
+    ride.status = status
+
+    pushToCustomer(ride)
+    if previousDriver then pushToDriver(ride) end
+    TriggerEvent('lifestate_ojol:server:rideClosed', ride, status)
+    detach(ride)
+
+    if previousDriver then
+        local previousDriverSource = drivers.SourceByCitizenid[previousDriver]
+        if previousDriverSource then
+            TriggerClientEvent('lifestate_ojol:client:driverRideChanged', previousDriverSource, nil)
+        end
+        TriggerEvent('lifestate_ojol:server:driverAvailabilityChanged', previousDriver,
+            drivers.IsDriverOnline(previousDriver))
+    end
+end
+
 ---Close a ride in a terminal state: persist, notify both sides and free the
 ---driver for other work.
 ---@param ride table
 ---@param status string terminal status
----@return boolean ok
+---@return boolean ok, string? reason
 function M.TerminalizeRide(ride, status)
     if not ride or not ride.rideId or not TERMINAL[status] then return false, 'invalid_terminal_state' end
     if M.IsTerminal(ride.status) then return ride.status == status, ride.status end
@@ -481,24 +504,39 @@ function M.TerminalizeRide(ride, status)
 
     local persisted, affected = pcall(db.FinalizeRide, ride, status)
     if not persisted then return false, 'database_error' end
-    if affected == false or affected == nil or affected == 0 then return false, 'already_finalized' end
 
-    local previousDriver = ride.driverCitizenId
-    ride.status = status
-    pushToCustomer(ride)
-    if previousDriver then pushToDriver(ride) end
-    TriggerEvent('lifestate_ojol:server:rideClosed', ride, status)
-    detach(ride)
-
-    if previousDriver then
-        local previousDriverSource = drivers.SourceByCitizenid[previousDriver]
-        if previousDriverSource then
-            TriggerClientEvent('lifestate_ojol:client:driverRideChanged', previousDriverSource, nil)
-        end
-        TriggerEvent('lifestate_ojol:server:driverAvailabilityChanged', previousDriver,
-            drivers.IsDriverOnline(previousDriver))
+    if affected == false or affected == nil or affected == 0 then
+        -- The row was already terminal when we tried to write it. Never keep a
+        -- ride alive in memory that the database considers closed.
+        M.AdoptPersistedTerminalState(ride)
+        return false, 'already_finalized'
     end
+
+    finishRide(ride, status)
     return true, status
+end
+
+---Reconcile a runtime ride with a database row that is already terminal.
+---
+---Reached only when a write that should have moved the row affected nothing,
+---i.e. somebody already finalized it. The runtime must then stop holding it,
+---otherwise the database would say "cancelled" while the server still believes
+---a driver is busy. Money is never touched here - the caller does not pay
+---anything for a ride it did not manage to close itself.
+---@param ride table
+---@return boolean adopted
+function M.AdoptPersistedTerminalState(ride)
+    if not ride or not ride.rideId then return false end
+    if not M.ActiveRides[ride.rideId] and not M.CustomerActiveRide[ride.customerCitizenid] then return false end
+
+    local ok, status = pcall(db.FetchRideStatus, ride.rideId)
+    if not ok or not status or not TERMINAL[status] then return false end
+
+    print(('[ojol] ride %s was already %s in the database - runtime reconciled')
+        :format(tostring(ride.rideId), tostring(status)))
+
+    finishRide(ride, status)
+    return true
 end
 
 local function closeRide(ride, status) return M.TerminalizeRide(ride, status) end
@@ -576,7 +614,6 @@ function M.CreateRide(customerCitizenid, pickup, destination, paymentMethod)
         acceptedAt = nil,
         completedAt = nil,
         cancelledAt = nil,
-        acceptLock = false,
         driverDistanceToPickupAtAccept = nil,
         compensationEligible = false,
     }
@@ -596,59 +633,61 @@ function M.CreateRide(customerCitizenid, pickup, destination, paymentMethod)
     return true, ride
 end
 
----Atomic acceptance. Called by matching after it has checked eligibility; every
----precondition is re-checked here, inside the per-ride accept lock, so two
----simultaneous accepts can never both win.
+---Acceptance body. Runs inside the per-ride lifecycle lock, which is the SAME
+---lock cancellation and completion take, so an accept can never land while a
+---cancellation owns the ride - and vice versa. Every precondition is re-checked
+---here; whatever eligibility the caller checked before is advisory only.
+---
+---Ordering is deliberate: the DATABASE owns the assignment. The runtime is only
+---advanced once the durable row names the driver, so a failed write can never
+---leave the server believing a ride is assigned while storage says it is still
+---searching. Nothing is registered as busy, no location stream starts and no
+---rideAssigned event fires on a write failure.
 ---@param rideId string
 ---@param driverCitizenid string
 ---@return boolean ok, string? reason
-function M.TryAcceptRide(rideId, driverCitizenid)
+local function acceptRideUnlocked(rideId, driverCitizenid)
     local ride = M.GetRide(rideId)
     if not ride then return false, 'ride_not_found' end
     if ride.status ~= M.STATES.SEARCHING then return false, 'order_already_taken' end
-    if ride.acceptLock then return false, 'order_already_taken' end
+    if ride.customerCitizenid == driverCitizenid then return false, 'invalid_driver' end
+    if M.DriverActiveRide[driverCitizenid] then return false, 'driver_busy' end
+    if not drivers.IsRegisteredDriver(driverCitizenid) then return false, 'not_registered' end
+    if not drivers.IsDriverOnline(driverCitizenid) then return false, 'offline' end
+    if not drivers.SourceByCitizenid[driverCitizenid] then return false, 'offline' end
 
-    ride.acceptLock = true
-
-    local assigned = false
-    local reason = 'order_already_taken'
-
-    if ride.status ~= M.STATES.SEARCHING then
-        reason = 'order_already_taken'
-    elseif ride.customerCitizenid == driverCitizenid then
-        reason = 'invalid_driver'
-    elseif M.DriverActiveRide[driverCitizenid] then
-        reason = 'driver_busy'
-    elseif not drivers.IsRegisteredDriver(driverCitizenid) then
-        reason = 'not_registered'
-    elseif not drivers.IsDriverOnline(driverCitizenid) then
-        reason = 'offline'
-    elseif not drivers.SourceByCitizenid[driverCitizenid] then
-        reason = 'offline'
-    else
-        ride.driverCitizenId = driverCitizenid
-        ride.acceptedAt = os.time()
-        ride.compensationEligible = false
-
-        local coords = drivers.GetPlayerCoordsByCitizenid(driverCitizenid)
-        ride.driverDistanceToPickupAtAccept = coords and fares.StraightLineMeters(coords, ride.pickup) or nil
-
-        M.DriverActiveRide[driverCitizenid] = ride.rideId
-        drivers.BusyDrivers[driverCitizenid] = true
-
-        assigned = M.SetStatus(ride, M.STATES.ACCEPTED)
-        if not assigned then reason = 'invalid_transition' end
+    local acceptedAt = os.time()
+    local persisted, affected = pcall(db.AcceptRide, rideId, driverCitizenid, acceptedAt)
+    if not persisted or not affected or affected == 0 then
+        -- Runtime untouched, so runtime and database still agree: the ride stays
+        -- SEARCHING and matching may still offer it to someone else.
+        print(('[ojol] driver assignment not persisted for ride %s - accept aborted')
+            :format(tostring(rideId)))
+        return false, 'database_error'
     end
 
-    ride.acceptLock = false
+    -- Point of no return: the row names this driver.
+    ride.driverCitizenId = driverCitizenid
+    ride.acceptedAt = acceptedAt
+    ride.compensationEligible = false
 
-    if not assigned then return false, reason end
+    local coords = drivers.GetPlayerCoordsByCitizenid(driverCitizenid)
+    ride.driverDistanceToPickupAtAccept = coords and fares.StraightLineMeters(coords, ride.pickup) or nil
 
-    local persisted = pcall(db.AcceptRide, ride.rideId, driverCitizenid, ride.acceptedAt)
-    if not persisted then
-        print(('[ojol] failed to persist driver assignment for ride %s'):format(tostring(ride.rideId)))
+    M.DriverActiveRide[driverCitizenid] = rideId
+    drivers.BusyDrivers[driverCitizenid] = true
+
+    if not M.SetStatus(ride, M.STATES.ACCEPTED) then
+        -- Unreachable from SEARCHING, but never keep a durable row naming a
+        -- driver the runtime has released.
+        ride.driverCitizenId, ride.acceptedAt = nil, nil
+        M.DriverActiveRide[driverCitizenid] = nil
+        drivers.BusyDrivers[driverCitizenid] = nil
+        pcall(db.ReopenRide, rideId)
+        return false, 'invalid_transition'
     end
 
+    -- ACCEPTED -> DRIVER_ENROUTE is unconditional in the transition table.
     M.SetStatus(ride, M.STATES.DRIVER_ENROUTE)
 
     startDriverLocationStream(ride)
@@ -657,6 +696,18 @@ function M.TryAcceptRide(rideId, driverCitizenid)
     M.PushRideState(ride)
 
     return true
+end
+
+---Atomic acceptance. The first valid acceptance wins; later ones see the ride
+---leave SEARCHING (or simply wait out the lock) and report order_already_taken.
+---@param rideId string
+---@param driverCitizenid string
+---@return boolean ok, string? reason
+function M.TryAcceptRide(rideId, driverCitizenid)
+    if type(rideId) ~= 'string' then return false, 'invalid_ride' end
+    if type(driverCitizenid) ~= 'string' or driverCitizenid == '' then return false, 'invalid_driver' end
+
+    return M.WithRideLock(rideId, function() return acceptRideUnlocked(rideId, driverCitizenid) end)
 end
 
 ---Customer cancellation. Always free for the customer (fee is Rp0); a driver who
@@ -673,10 +724,18 @@ local function customerCancelUnlocked(customerCitizenid)
         ride.compensationEligible = evaluateCompensation(ride)
     end
 
-    closeRide(ride, M.STATES.CANCELLED_CUSTOMER)
+    local closed, closeReason = M.TerminalizeRide(ride, M.STATES.CANCELLED_CUSTOMER)
+    if not closed then
+        -- The cancellation was not durably recorded, so it did not happen. The
+        -- customer is told so, and no company money may be released for a ride
+        -- that is still live. Eligibility is recomputed if they try again.
+        ride.compensationEligible = false
+        return false, closeReason or 'database_error'
+    end
 
     if ride.compensationEligible then
-        -- Idempotent: the persisted compensation_paid flag guards replays.
+        -- Only reachable once the cancellation is committed. Idempotent: the
+        -- ride's money ledger allows at most one payout.
         payments.PayCompensation(ride)
     end
 
@@ -689,6 +748,49 @@ function M.CustomerCancel(customerCitizenid)
     return M.WithRideLock(ride.rideId, function() return customerCancelUnlocked(customerCitizenid) end)
 end
 
+---Work out the after-pickup recovery values WITHOUT touching any state.
+---
+---The road-node lookup exists only on the client (CfxLua exposes no server-side
+---vehicle nodes), so the customer's client proposes the point. It is not
+---trusted: the proposal must be sane AND within maxPickupSnapMeters of the
+---position the server itself sees for that ped, otherwise there is no recovery.
+---There is deliberately NO fallback to the raw ped coordinate - a recovery that
+---cannot find a trustworthy road point fails, and the caller closes the ride
+---rather than restarting it from an arbitrary position.
+---
+---Nothing is mutated here, so a refusal leaves the ride exactly as it was.
+---@param ride table
+---@return table? recovery staged { pickup, distanceMeters, fare, driverPayout, companyFee }
+---@return string? reason
+local function prepareAbandonRecovery(ride)
+    local customerCoords = drivers.GetPlayerCoordsByCitizenid(ride.customerCitizenid)
+    if not customerCoords then return nil, 'customer_offline' end
+
+    local customerSource = drivers.SourceByCitizenid[ride.customerCitizenid]
+    if not customerSource then return nil, 'customer_offline' end
+
+    local requestOk, proposed = pcall(function()
+        return lib.callback.await('lifestate_ojol:client:getRoadPickup', customerSource)
+    end)
+
+    if not requestOk or not isSanePoint(proposed) then return nil, 'unsafe_recovery_pickup' end
+
+    if horizontalDistance(proposed, customerCoords) > sharedConfig.maxPickupSnapMeters then
+        return nil, 'unsafe_recovery_pickup'
+    end
+
+    local pickup = toPoint(proposed)
+    local quote = fares.BuildQuote(pickup, ride.destination)
+
+    return {
+        pickup = pickup,
+        distanceMeters = quote.distanceMeters,
+        fare = quote.fare,
+        driverPayout = quote.driverPayout,
+        companyFee = quote.companyFee,
+    }
+end
+
 ---Driver releases an accepted ride, for any reason. Before pickup the ride
 ---returns to SEARCHING unchanged (same id, pickup, destination, fare, payment
 ---method) and matching restarts - rematching is identical for every origin.
@@ -697,6 +799,10 @@ end
 ---(`manual_driver_cancel`) increments the driver's cancel counters and creates
 ---the hidden pair cooldown. A disconnect, a firing or a server failure must never
 ---damage a driver's performance record or block them from a customer afterwards.
+---
+---Persistence is attempted BEFORE any runtime state changes. A refused write
+---aborts the whole operation with nothing mutated, so the runtime can never end
+---up believing a ride was released while storage still names the driver.
 ---
 ---@param driverCitizenid string
 ---@param origin string one of M.CANCEL_ORIGINS
@@ -710,14 +816,51 @@ local function driverCancelUnlocked(driverCitizenid, origin)
     end
 
     local voluntary = M.IsVoluntaryCancel(origin)
-
-    local previousDriverSource = drivers.SourceByCitizenid[driverCitizenid]
-    M.DriverActiveRide[driverCitizenid] = nil
-    drivers.BusyDrivers[driverCitizenid] = nil
-
     local beforePickup = ride.status == M.STATES.ACCEPTED
         or ride.status == M.STATES.DRIVER_ENROUTE
         or ride.status == M.STATES.DRIVER_ARRIVED
+
+    -- The database row is what every other part of the server - and the next
+    -- boot - treats as the truth about who owns a ride.
+    local recovery
+    local persisted, affected
+
+    if beforePickup then
+        persisted, affected = pcall(db.ReopenRide, ride.rideId)
+    else
+        local reason
+        recovery, reason = prepareAbandonRecovery(ride)
+        if not recovery then
+            -- No trusted road point for the passenger's current position: the
+            -- ride cannot be reopened, so it is closed instead of being
+            -- restarted from an untrusted coordinate. Nothing is charged.
+            closeRide(ride, M.STATES.FAILED)
+            return false, reason
+        end
+
+        persisted, affected = pcall(db.ReopenRideRecalculated, ride.rideId, recovery)
+    end
+
+    if not persisted or not affected or affected == 0 then
+        if not persisted then
+            print(('[ojol] failed to persist the release of ride %s'):format(tostring(ride.rideId)))
+        end
+
+        -- Never carry on with a runtime ride the database refuses to release.
+        -- This also reconciles the case where somebody already closed the row.
+        M.AdoptPersistedTerminalState(ride)
+        return false, 'database_error'
+    end
+
+    -- Storage is authoritative from here on: apply the runtime transition.
+    local previousDriverSource = drivers.SourceByCitizenid[driverCitizenid]
+
+    M.DriverActiveRide[driverCitizenid] = nil
+    drivers.BusyDrivers[driverCitizenid] = nil
+    ride.driverCitizenId = nil
+    ride.acceptedAt = nil
+    ride.driverDistanceToPickupAtAccept = nil
+    ride.compensationEligible = false
 
     if voluntary then
         -- Hidden 5-minute driver <-> customer cooldown (matching owns it) and the
@@ -732,38 +875,26 @@ local function driverCancelUnlocked(driverCitizenid, origin)
         end
     end
 
-    if not beforePickup then
-        -- After-pickup abandon (Phase 3C): the passenger is already with the
-        -- driver, so the ride must NOT die - the customer is reopened with a
-        -- fresh pickup at their current position and a recalculated fare for
-        -- the remaining route. The original destination never changes.
-        local reopened, reopenReason = M.ReopenRideAfterAbandon(ride)
-        if previousDriverSource then
-            TriggerClientEvent('lifestate_ojol:client:driverRideChanged', previousDriverSource, nil)
-        end
-        TriggerEvent('lifestate_ojol:server:driverAvailabilityChanged', driverCitizenid,
-            drivers.IsDriverOnline(driverCitizenid))
-        return reopened, reopenReason
+    if recovery then
+        -- After-pickup abandon: the passenger is already with the driver, so the
+        -- request reopens from where they are now, against the unchanged
+        -- destination, fare basis and payment method. These are exactly the
+        -- values persisted above - the runtime never invents its own.
+        ride.pickup = recovery.pickup
+        ride.distanceMeters = recovery.distanceMeters
+        ride.fare = recovery.fare
+        ride.driverPayout = recovery.driverPayout
+        ride.companyFee = recovery.companyFee
+        ride.paymentFailed = false
+        ride.payoutReceived = nil
     end
 
-    -- Back to SEARCHING on the same ride.
-    ride.driverCitizenId = nil
-    ride.acceptedAt = nil
-    ride.driverDistanceToPickupAtAccept = nil
-    ride.compensationEligible = false
-
-    local ok = M.SetStatus(ride, M.STATES.SEARCHING)
-    if not ok then
+    -- Back to SEARCHING on the same ride (fresh search from tier 1).
+    if not M.SetStatus(ride, M.STATES.SEARCHING) then
         closeRide(ride, M.STATES.FAILED)
         return false, 'invalid_transition'
     end
 
-    local persisted = pcall(db.ReopenRide, ride.rideId)
-    if not persisted then
-        print(('[ojol] failed to reopen ride %s'):format(tostring(ride.rideId)))
-    end
-
-    -- Fresh search from tier 1 for the reopened request.
     TriggerEvent('lifestate_ojol:server:rideSearching', ride)
     M.PushRideState(ride)
     if previousDriverSource then
@@ -1016,64 +1147,6 @@ function M.SubmitRating(customerCitizenid, rideId, rating)
     return true
 end
 
----After-pickup abandon recovery. The customer's ride reopens from their
----current position: a new pickup is snapped from the server-side ped (the
----client-supplied road snap is not trusted here), the fare/distance/split are
----recalculated for the remaining route, the payment method is kept, and the
----driver slot is freed. Origin semantics were already applied by DriverCancel.
----@param ride table
----@return boolean ok, string? reason
-function M.ReopenRideAfterAbandon(ride)
-    local customerCoords = drivers.GetPlayerCoordsByCitizenid(ride.customerCitizenid)
-    if not customerCoords then
-        -- Customer gone too (or mid-reconnect): nothing to reopen onto.
-        closeRide(ride, M.STATES.CANCELLED_DRIVER)
-        return true
-    end
-
-    local customerSource = drivers.SourceByCitizenid[ride.customerCitizenid]
-    local callbackOk, proposed = pcall(function()
-        return lib.callback.await('lifestate_ojol:client:getRoadPickup', customerSource)
-    end)
-    if not callbackOk or not isSanePoint(proposed)
-        or horizontalDistance(proposed, customerCoords) > sharedConfig.maxPickupSnapMeters then
-        closeRide(ride, M.STATES.FAILED)
-        return false, 'unsafe_recovery_pickup'
-    end
-
-    local newPickup = toPoint(proposed)
-    local quote = fares.BuildQuote(newPickup, ride.destination)
-
-    ride.pickup = newPickup
-    ride.distanceMeters = quote.distanceMeters
-    ride.fare = quote.fare
-    ride.driverPayout = quote.driverPayout
-    ride.companyFee = quote.companyFee
-    ride.driverCitizenId = nil
-    ride.acceptedAt = nil
-    ride.driverDistanceToPickupAtAccept = nil
-    ride.compensationEligible = false
-    ride.paymentFailed = false
-    ride.payoutReceived = nil
-
-    if not M.SetStatus(ride, M.STATES.SEARCHING) then
-        closeRide(ride, M.STATES.FAILED)
-        return false, 'invalid_transition'
-    end
-
-    local persisted = pcall(db.ReopenRideRecalculated, ride.rideId, ride)
-    if not persisted then
-        print(('[ojol] failed to persist recalculated reopen for ride %s'):format(tostring(ride.rideId)))
-    end
-
-    -- Fresh search from tier 1; the customer's app returns to MENCARI DRIVER
-    -- automatically (no manual re-request).
-    TriggerEvent('lifestate_ojol:server:rideSearching', ride)
-    M.PushRideState(ride)
-
-    return true
-end
-
 -- Disconnects / staff actions -------------------------------------------------
 
 ---A player dropped: finish (or reopen) whatever they were part of. Called before
@@ -1090,19 +1163,13 @@ function M.HandlePlayerDropped(citizenid)
     end
 
     if M.CustomerActiveRide[citizenid] then
-        local ride = M.GetCustomerRide(citizenid)
-        if ride then
-            if ride.driverCitizenId then
-                ride.compensationEligible = evaluateCompensation(ride)
-            end
-            closeRide(ride, M.STATES.CANCELLED_CUSTOMER)
-
-            if ride.compensationEligible then
-                -- The driver may himself be the one who dropped; the offline
-                -- wallet path inside payments covers that (bank + persisted).
-                payments.PayCompensation(ride)
-            end
-        end
+        -- A disconnect is nobody's voluntary act, but the customer-cancel
+        -- semantics are the right ones for it (fee Rp0, unchanged driver
+        -- compensation eligibility). The same locked path is reused, so
+        -- terminalization is confirmed before any compensation is released, and
+        -- the driver may himself be the one who dropped - the offline wallet
+        -- path inside payments covers that.
+        M.CustomerCancel(citizenid)
     end
 end
 

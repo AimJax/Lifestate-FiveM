@@ -1,5 +1,20 @@
 local M = {}
 
+---A ride in one of these states is finished forever: no code path may move it
+---back into SEARCHING or reopen it. Kept in one place so the persistence
+---guards below cannot drift apart.
+local TERMINAL_STATUSES = { 'COMPLETED', 'CANCELLED_CUSTOMER', 'CANCELLED_DRIVER', 'FAILED' }
+local TERMINAL_STATUSES_SQL = "'COMPLETED','CANCELLED_CUSTOMER','CANCELLED_DRIVER','FAILED'"
+
+---@param status string
+---@return boolean
+function M.IsTerminalStatus(status)
+    for i = 1, #TERMINAL_STATUSES do
+        if TERMINAL_STATUSES[i] == status then return true end
+    end
+    return false
+end
+
 ---Create all Ojol tables if missing. Safe to run on every restart (IF NOT EXISTS + INSERT IGNORE).
 function M.EnsureSchema()
     MySQL.query.await([[
@@ -268,7 +283,7 @@ end
 ---@return number affectedRows
 function M.FinalizeRide(ride, status)
     local flag = ride.compensationEligible and 1 or 0
-    local terminal = "'COMPLETED','CANCELLED_CUSTOMER','CANCELLED_DRIVER','FAILED'"
+    local terminal = TERMINAL_STATUSES_SQL
 
     if status == 'COMPLETED' then
         local now = os.time()
@@ -423,6 +438,53 @@ function M.MarkMoneyLedgerRolledBack(ledgerId)
     ]], { os.time(), ledgerId })
 end
 
+---Return a ledger to a genuinely retryable state.
+---
+---Called at the start of a payment attempt when a previous one ended in a clean
+---failure ('failed') or a fully confirmed rollback ('rolled_back'). A backward
+---step in either of those states means the money is provably back where it
+---started, so the forward steps can be reset to 'pending' and re-run.
+---
+---A forward step is clean and re-runnable when it is 'failed' (the operation
+---refused, so nothing moved) or 'applied' with its rollback confirmed. Both go
+---back to 'pending'; 'not_required' legs (the customer leg of a compensation
+---ledger) are left exactly as they are.
+---
+---This is single-statement and refuses to guess. It affects 0 rows - and the
+---caller quarantines instead - whenever:
+---  - the ledger is paid, needs reconciliation, or is mid-flight ('processing'),
+---  - ANY step (forward or backward) is 'processing' (money may have moved and
+---    only the confirmation was lost),
+---  - a forward step is 'applied' without its matching rollback being 'applied'
+---    (the money is still out - resetting it would move it a second time).
+---@param ledgerId string
+---@return number affectedRows @>0 means the ledger is now 'pending' and retryable
+function M.ResetMoneyLedgerForRetry(ledgerId)
+    return MySQL.update.await([[
+        UPDATE `ojol_money_ledger`
+        SET
+            `customer_step` = IF(`customer_step` IN ('applied', 'failed'), 'pending', `customer_step`),
+            `driver_step`   = IF(`driver_step`   IN ('applied', 'failed'), 'pending', `driver_step`),
+            `company_step`  = IF(`company_step`  IN ('applied', 'failed'), 'pending', `company_step`),
+            `customer_rollback` = 'pending',
+            `driver_rollback`   = 'pending',
+            `company_rollback`  = 'pending',
+            `status` = 'pending', `failed_step` = NULL, `failure_reason` = NULL,
+            `updated_at` = ?
+        WHERE `ledger_id` = ?
+          AND `status` IN ('pending', 'failed', 'rolled_back')
+          AND `customer_step` IN ('pending', 'failed', 'applied', 'not_required')
+          AND `driver_step`   IN ('pending', 'failed', 'applied', 'not_required')
+          AND `company_step`  IN ('pending', 'failed', 'applied', 'not_required')
+          AND `customer_rollback` IN ('pending', 'applied')
+          AND `driver_rollback`   IN ('pending', 'applied')
+          AND `company_rollback`  IN ('pending', 'applied')
+          AND (`customer_step` <> 'applied' OR `customer_rollback` = 'applied')
+          AND (`driver_step`   <> 'applied' OR `driver_rollback`   = 'applied')
+          AND (`company_step`  <> 'applied' OR `company_rollback`  = 'applied')
+    ]], { os.time(), ledgerId })
+end
+
 function M.MarkMoneyLedgerPaid(ledgerId)
     return MySQL.update.await([[
         UPDATE `ojol_money_ledger`
@@ -439,6 +501,12 @@ function M.IsFareLedgerPaid(rideId)
     local row = M.FetchMoneyLedger(('ride:%s:fare'):format(rideId))
     return row ~= nil and row.status == 'paid'
 end
+
+-- The ride-level `payment_status` machine (MarkPaymentProcessing /
+-- ResetPaymentPending / MarkRidePaid / RecordRidePayout / CountStuckPayments)
+-- is superseded by the per-ride money ledger above, which is the only place
+-- fare money is actually guarded. The columns and helpers are left in place for
+-- the ride-history audit trail; nothing in the money path reads them.
 
 function M.QuarantineInterruptedLedgers()
     local rows = MySQL.query.await([[
@@ -623,34 +691,69 @@ function M.FetchLatestCompletedUnrated(customerCitizenid)
     ]], { customerCitizenid })
 end
 
+---The persisted status of a ride. Used to reconcile the runtime with storage
+---when a write that should have moved the row did not affect it.
+---@param rideId string
+---@return string? status
+function M.FetchRideStatus(rideId)
+    local row = MySQL.single.await('SELECT `status` FROM `ojol_rides` WHERE `ride_id` = ?', { rideId })
+    return row and row.status or nil
+end
+
+---True when the row is already exactly where the caller wanted to put it, which
+---makes a "no rows affected" write a benign repeat instead of a failure. A row
+---that is terminal, absent or still assigned reports false.
+---@param rideId string
+---@return boolean
+local function isAlreadyReleased(rideId)
+    local row = MySQL.single.await(
+        'SELECT `status`, `driver_citizenid` FROM `ojol_rides` WHERE `ride_id` = ?', { rideId })
+
+    return row ~= nil and row.status == 'SEARCHING' and row.driver_citizenid == nil
+end
+
 ---Put an in-progress ride back into SEARCHING after its driver abandoned it.
 ---The ride keeps its identity, pickup, destination, fare and payment method.
+---
+---A terminal row is never resurrected: if the ride was already closed the
+---statement affects nothing and the caller must handle the refusal instead of
+---carrying on with a runtime ride that storage considers finished.
 ---@param rideId string
----@return number affectedRows
+---@return number affectedRows @>0 only when the row is (now) searching
 function M.ReopenRide(rideId)
-    return MySQL.update.await(
-        'UPDATE `ojol_rides` SET `driver_citizenid` = NULL, `accepted_at` = NULL, `status` = ? WHERE `ride_id` = ?',
+    local affected = MySQL.update.await(
+        ('UPDATE `ojol_rides` SET `driver_citizenid` = NULL, `accepted_at` = NULL, `status` = ? WHERE `ride_id` = ? AND `status` NOT IN (%s)')
+            :format(TERMINAL_STATUSES_SQL),
         { 'SEARCHING', rideId })
+
+    if affected and affected > 0 then return affected end
+    if isAlreadyReleased(rideId) then return 1 end
+    return 0
 end
 
 ---Reopen after an after-pickup abandon: the pickup moves to the customer's
 ---current position and the remaining-route fare is recalculated server-side.
----The original destination and the payment method never change.
+---The original destination and the payment method never change. Same terminal
+---guard as ReopenRide.
 ---@param rideId string
----@param ride table runtime ride carrying the new pickup/fare values
----@return number affectedRows
-function M.ReopenRideRecalculated(rideId, ride)
-    return MySQL.update.await([[
+---@param values table the validated recovery values to persist
+---@return number affectedRows @>0 only when the row is (now) searching
+function M.ReopenRideRecalculated(rideId, values)
+    local affected = MySQL.update.await(([[
         UPDATE `ojol_rides`
         SET `driver_citizenid` = NULL, `accepted_at` = NULL, `status` = 'SEARCHING',
             `pickup_x` = ?, `pickup_y` = ?, `pickup_z` = ?,
             `distance_meters` = ?, `fare` = ?, `driver_payout` = ?, `company_fee` = ?
-        WHERE `ride_id` = ?
-    ]], {
-        ride.pickup.x, ride.pickup.y, ride.pickup.z,
-        ride.distanceMeters, ride.fare, ride.driverPayout, ride.companyFee,
+        WHERE `ride_id` = ? AND `status` NOT IN (%s)
+    ]]):format(TERMINAL_STATUSES_SQL), {
+        values.pickup.x, values.pickup.y, values.pickup.z,
+        values.distanceMeters, values.fare, values.driverPayout, values.companyFee,
         rideId,
     })
+
+    if affected and affected > 0 then return affected end
+    if isAlreadyReleased(rideId) then return 1 end
+    return 0
 end
 
 -- Company account ---------------------------------------------------------

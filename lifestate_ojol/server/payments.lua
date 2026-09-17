@@ -36,6 +36,28 @@ local function fareApplied(row)
     return row.customer_step == 'applied' and row.driver_step == 'applied' and row.company_step == 'applied'
 end
 
+---Make a cleanly failed (or fully rolled back) ledger payable again.
+---
+---The database refuses the reset unless every step is provably settled, so an
+---ambiguous state can never be silently retried: a refusal is reported as
+---needs_reconciliation and no wallet is touched.
+---@param rideId string
+---@param action string 'fare' | 'compensation'
+---@return boolean reset
+local function resetLedgerForRetry(rideId, action)
+    local ok, affected = pcall(db.ResetMoneyLedgerForRetry, ledgerId(rideId, action))
+    return ok and (affected or 0) > 0
+end
+
+---Retry entry points (also usable by a future admin repair command).
+---@param rideId string
+---@return boolean retryable
+function M.ResetFareLedgerForRetry(rideId) return resetLedgerForRetry(rideId, 'fare') end
+
+---@param rideId string
+---@return boolean retryable
+function M.ResetCompensationLedgerForRetry(rideId) return resetLedgerForRetry(rideId, 'compensation') end
+
 local function finalizePaid(ride, row, movedNow)
     local ok, rows = pcall(db.MarkMoneyLedgerPaid, row.ledger_id)
     if ok and (rows or 0) > 0 then return true, nil, movedNow, true end
@@ -62,6 +84,11 @@ end
 
 local function rollbackStep(ride, row, step, fn)
     local field = step .. '_rollback'
+
+    -- Already reversed: a retry after a partial rollback must not re-run the
+    -- reversal (that would credit the reversed amount twice).
+    if row[field] == 'applied' then return true end
+
     if not transition(row.ledger_id, field, 'pending', 'processing') then
         reconcile(ride.rideId, row.ledger_id, field, 'rollback_intent_not_persisted')
         return false
@@ -117,6 +144,21 @@ function M.PayRide(ride)
         end
         if fareApplied(row) then return finalizePaid(ride, row, false) end
         if row.status == 'needs_reconciliation' then return false, 'needs_reconciliation', false end
+
+        -- A previous attempt failed cleanly (no money moved) or was fully rolled
+        -- back. Return the ledger to 'pending' so THIS attempt can run - the
+        -- whole point of the retry path. If the database refuses (anything is
+        -- still ambiguous) the ledger is quarantined and no wallet is touched.
+        if row.status == 'failed' or row.status == 'rolled_back' then
+            if not resetLedgerForRetry(ride.rideId, 'fare') then
+                reconcile(ride.rideId, id, row.failed_step or row.status, 'retryable_reset_refused')
+                return false, 'needs_reconciliation', false
+            end
+
+            -- Work from the reset row, never the stale snapshot.
+            row = fetch(id)
+            if not row then return false, 'database_error', false end
+        end
 
         local customer = player(ride.customerCitizenid)
         if not customer then return false, 'customer_offline', false end
@@ -198,6 +240,18 @@ function M.PayCompensation(ride)
         return paid, paidWhy, false
     end
     if row.status == 'needs_reconciliation' then return false, 'needs_reconciliation', false end
+
+    -- Same retry semantics as the fare ledger: a cleanly failed or fully rolled
+    -- back compensation becomes payable again, exactly once.
+    if row.status == 'failed' or row.status == 'rolled_back' then
+        if not resetLedgerForRetry(ride.rideId, 'compensation') then
+            reconcile(ride.rideId, id, row.failed_step or row.status, 'retryable_reset_refused')
+            return false, 'needs_reconciliation', false
+        end
+
+        row = fetch(id)
+        if not row then return false, 'database_error', false end
+    end
 
     local ok, why = applyStep(ride, row, 'company', function()
         return company.RemoveCompanyFunds(amount, audit(ride.rideId, 'compensation'), ride.rideId)
