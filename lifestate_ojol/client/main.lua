@@ -1,41 +1,20 @@
 local config = require 'config.client'
 local sharedConfig = require 'config.shared'
-local route = 1
-local max = #sharedConfig.npcLocations.locations
+
 local busBlip = nil
-local vehicleZone
-local deliverZone
-local pickupZone
+local dispatcherPed = nil
 
-local NpcData = {
+local BikeData = {
     Active = false,
-    LastNpc = nil,
-    LastDeliver = nil,
-    Npc = nil,
-    NpcBlip = nil,
-    DeliveryBlip = nil,
-    NpcTaken = false,
-    NpcDelivered = false,
-    CountDown = 180
+    Vehicle = nil,
+    NetId = nil,
 }
 
-local BusData = {
-    Active = false,
-}
+-- Driver state (server-authoritative mirror for UI gating; see OnPlayerLoaded)
+local driverRegistered = false
+local driverOnline = false
 
--- Functions
-local function resetNpcTask()
-    NpcData = {
-        Active = false,
-        LastNpc = nil,
-        LastDeliver = nil,
-        Npc = nil,
-        NpcBlip = nil,
-        DeliveryBlip = nil,
-        NpcTaken = false,
-        NpcDelivered = false,
-    }
-end
+-- Functions -----------------------------------------------------------------
 
 local function removeBusBlip()
     if not busBlip then return end
@@ -43,210 +22,152 @@ local function removeBusBlip()
     busBlip = nil
 end
 
-local function removeNPCBlip()
-    if NpcData.DeliveryBlip then
-        RemoveBlip(NpcData.DeliveryBlip)
-        NpcData.DeliveryBlip = nil
-    end
-
-    if NpcData.NpcBlip then
-        RemoveBlip(NpcData.NpcBlip)
-        NpcData.NpcBlip = nil
-    end
-end
-
 local function updateBlip()
-    if table.type(QBX.PlayerData) == 'empty' or (QBX.PlayerData.job.name ~= "bus" and busBlip) then
-        removeBusBlip()
-        return
-    elseif (QBX.PlayerData.job.name == "bus" and not busBlip) then
-        local coords = sharedConfig.location
-        busBlip = AddBlipForCoord(coords.x, coords.y, coords.z)
-        SetBlipSprite(busBlip, 513)
-        SetBlipDisplay(busBlip, 4)
-        SetBlipScale(busBlip, 0.6)
-        SetBlipAsShortRange(busBlip, true)
-        SetBlipColour(busBlip, 49)
-        BeginTextCommandSetBlipName("STRING")
-        AddTextComponentSubstringPlayerName(locale('info.bus_depot'))
-        EndTextCommandSetBlipName(busBlip)
-        return
-    end
+    busBlip = AddBlipForCoord(sharedConfig.location.x, sharedConfig.location.y, sharedConfig.location.z)
+    SetBlipSprite(busBlip, 513)
+    SetBlipDisplay(busBlip, 4)
+    SetBlipScale(busBlip, 0.6)
+    SetBlipAsShortRange(busBlip, true)
+    SetBlipColour(busBlip, 49)
+    BeginTextCommandSetBlipName("STRING")
+    AddTextComponentSubstringPlayerName(locale('info.bus_depot'))
+    EndTextCommandSetBlipName(busBlip)
 end
 
-local function isPlayerVehicleABus()
-    if not cache.vehicle then return false end
-    local veh = GetEntityModel(cache.vehicle)
-
-    for i = 1, #config.allowedVehicles, 1 do
-        if veh == config.allowedVehicles[i].model then
-            return true
-        end
-    end
-
-    if veh == `dynasty` then
+local function isBikeDataVehicleInvalid()
+    if not BikeData.Vehicle then
         return true
     end
-
+    if not DoesEntityExist(BikeData.Vehicle) then
+        return true
+    end
+    if IsEntityDead(BikeData.Vehicle) then
+        return true
+    end
+    if GetVehicleEngineHealth(BikeData.Vehicle) <= 0.0 then
+        return true
+    end
+    if not IsVehicleDriveable(BikeData.Vehicle, false) then
+        return true
+    end
+    if GetEntitySubmergedLevel(BikeData.Vehicle) >= 0.8 then
+        return true
+    end
     return false
 end
 
-local function nextStop()
-    route = route <= (max - 1) and route + 1 or 1
-end
-
-local function removePed(ped)
-    SetTimeout(60000, function()
-        DeletePed(ped)
-    end)
-end
-
-local function getDeliveryLocation()
-    nextStop()
-    removeNPCBlip()
-    NpcData.DeliveryBlip = AddBlipForCoord(sharedConfig.npcLocations.locations[route].x, sharedConfig.npcLocations.locations[route].y, sharedConfig.npcLocations.locations[route].z)
-    SetBlipColour(NpcData.DeliveryBlip, 3)
-    SetBlipRoute(NpcData.DeliveryBlip, true)
-    SetBlipRouteColour(NpcData.DeliveryBlip, 3)
-    NpcData.LastDeliver = route
-    local inRange = false
-    local shownTextUI = false
-    deliverZone = lib.zones.sphere({
-        name = "qbx_busjob_bus_deliver",
-        coords = vec3(sharedConfig.npcLocations.locations[route].x, sharedConfig.npcLocations.locations[route].y, sharedConfig.npcLocations.locations[route].z),
-        radius = 5,
-        debug = config.debugPoly,
-        onEnter = function()
-            inRange = true
-            if not shownTextUI then
-                lib.showTextUI(locale('info.busstop_text'))
-                shownTextUI = true
-            end
-            CreateThread(function()
-                repeat
-                    Wait(0)
-                    if IsControlJustPressed(0, 38) then
-                        TaskLeaveVehicle(NpcData.Npc, cache.vehicle, 0)
-                        SetEntityAsMissionEntity(NpcData.Npc, false, true)
-                        SetEntityAsNoLongerNeeded(NpcData.Npc)
-                        local targetCoords = sharedConfig.npcLocations.locations[NpcData.LastNpc]
-                        TaskGoStraightToCoord(NpcData.Npc, targetCoords.x, targetCoords.y, targetCoords.z, 1.0, -1, 0.0, 0.0)
-                        lib.notify({
-                            title = locale('info.bus_job'),
-                            description = locale('info.dropped_off'),
-                            type = 'success'
-                        })
-                        removeNPCBlip()
-                        removePed(NpcData.Npc)
-                        resetNpcTask()
-                        nextStop()
-                        TriggerEvent('qbx_busjob:client:DoBusNpc')
-                        lib.hideTextUI()
-                        shownTextUI = false
-                        deliverZone:remove()
-                        deliverZone = nil
-                        break
-                    end
-                until not inRange
-            end)
-        end,
-        onExit = function()
-            lib.hideTextUI()
-            shownTextUI = false
-            inRange = false
-        end
-    })
-end
-
-local function busGarage()
+local function bikeGarage()
     local vehicleMenu = {}
     for _, v in pairs(config.allowedVehicles) do
         vehicleMenu[#vehicleMenu + 1] = {
             title = locale('info.bus'),
-            event = "qbx_busjob:client:TakeVehicle",
+            event = "lifestate_ojol:client:TakeVehicle",
             args = v
         }
     end
     lib.registerContext({
-        id = 'qbx_busjob_open_garage_context_menu',
+        id = 'lifestate_ojol_open_garage_context_menu',
         title = locale('info.bus_header'),
         options = vehicleMenu
     })
-    lib.showContext('qbx_busjob_open_garage_context_menu')
+    lib.showContext('lifestate_ojol_open_garage_context_menu')
+end
+
+local function createDispatcher()
+    if dispatcherPed and DoesEntityExist(dispatcherPed) then
+        return
+    end
+
+    local model = `s_m_m_gentransport`
+    lib.requestModel(model, 10000)
+
+    local coords = sharedConfig.dispatcherLocation
+
+    dispatcherPed = CreatePed(
+        0,
+        model,
+        coords.x,
+        coords.y,
+        coords.z - 1.0,
+        coords.w,
+        false,
+        false
+    )
+
+    SetEntityInvincible(dispatcherPed, true)
+    FreezeEntityPosition(dispatcherPed, true)
+    SetBlockingOfNonTemporaryEvents(dispatcherPed, true)
+
+    SetPedDefaultComponentVariation(dispatcherPed)
+    TaskStartScenarioInPlace(dispatcherPed, 'WORLD_HUMAN_CLIPBOARD', 0, true)
+
+    exports.ox_target:addLocalEntity(dispatcherPed, {
+        {
+            name = 'lifestate_ojol_take_motor',
+            icon = 'fa-solid fa-motorcycle',
+            label = 'Ambil Motor',
+            distance = 2.5,
+
+            canInteract = function()
+                -- Option stays visible to everyone; authorization is enforced on select
+                -- and again server-side. A registered-but-offline driver must be able
+                -- to see the denial message telling them to clock in.
+                return true
+            end,
+
+            onSelect = function()
+                if not driverRegistered then
+                    lib.notify({
+                        title = 'Pangkalan Ojek',
+                        description = 'Kamu belum terdaftar sebagai driver Ojol.',
+                        type = 'error'
+                    })
+                    return
+                end
+
+                if not driverOnline then
+                    lib.notify({
+                        title = 'Pangkalan Ojek',
+                        description = 'Kamu belum online. Check-in melalui aplikasi Ojol terlebih dahulu.',
+                        type = 'error'
+                    })
+                    return
+                end
+
+                bikeGarage()
+            end
+        }
+    })
+
+    SetModelAsNoLongerNeeded(model)
 end
 
 local function updateZone()
-    if vehicleZone then
-        vehicleZone:remove()
-        vehicleZone = nil
-    end
-
-    if table.type(QBX.PlayerData) == 'empty' or QBX.PlayerData.job.name ~= 'bus' then return end
-
-    local inRange = false
-    local shownTextUI = false
-    vehicleZone = lib.zones.sphere({
-        name = "qbx_busjob_bus_main",
-        coords = sharedConfig.location.xyz,
-        radius = 5,
-        debug = config.debugPoly,
-        onEnter = function()
-            inRange = true
-            CreateThread(function()
-                repeat
-                    Wait(0)
-                    if not isPlayerVehicleABus() then
-                        if not shownTextUI then
-                            lib.showTextUI(locale('info.bus_job_vehicles'))
-                            shownTextUI = true
-                        end
-                        if IsControlJustReleased(0, 38) then
-                            busGarage()
-                            lib.hideTextUI()
-                            shownTextUI = false
-                            break
-                        end
-                    else
-                        if not shownTextUI then
-                            lib.showTextUI(locale('info.bus_stop_work'))
-                            shownTextUI = true
-                        end
-                        if IsControlJustReleased(0, 38) then
-                            if not NpcData.Active or NpcData.Active and not NpcData.NpcTaken then
-                                if cache.vehicle then
-                                    BusData.Active = false
-                                    DeleteVehicle(cache.vehicle)
-                                    removeNPCBlip()
-                                    lib.hideTextUI()
-                                    shownTextUI = false
-                                    resetNpcTask()
-                                    break
-                                end
-                            else
-                                lib.notify({
-                                    title = locale('info.bus_job'),
-                                    description = locale('error.drop_off_passengers'),
-                                    type = 'error'
-                                })
-                            end
-                        end
-                    end
-                until not inRange
-            end)
-        end,
-        onExit = function()
-            shownTextUI = false
-            inRange = false
-            Wait(1000)
-            lib.hideTextUI()
-        end
-    })
+    createDispatcher()
 end
 
--- onExit()
+-- Events --------------------------------------------------------------------
 
-RegisterNetEvent("qbx_busjob:client:TakeVehicle", function(data)
-    if BusData.Active then
+RegisterNetEvent("lifestate_ojol:client:TakeVehicle", function(data)
+    if not driverRegistered then
+        lib.notify({
+            title = 'Ojol',
+            description = 'Kamu belum terdaftar sebagai driver Ojol.',
+            type = 'error'
+        })
+        return
+    end
+
+    if not driverOnline then
+        lib.notify({
+            title = 'Ojol',
+            description = 'Kamu belum online. Check-in melalui aplikasi Ojol terlebih dahulu.',
+            type = 'error'
+        })
+        return
+    end
+
+    if BikeData.Active and not isBikeDataVehicleInvalid() then
         lib.notify({
             title = locale('info.bus_job'),
             description = locale('error.one_bus_active'),
@@ -255,7 +176,13 @@ RegisterNetEvent("qbx_busjob:client:TakeVehicle", function(data)
         return
     end
 
-    local netId = lib.callback.await('qbx_busjob:server:spawnBus', false, data.model)
+    if BikeData.Active and isBikeDataVehicleInvalid() then
+        BikeData.Active = false
+        BikeData.Vehicle = nil
+        BikeData.NetId = nil
+    end
+
+    local netId = lib.callback.await('lifestate_ojol:server:spawnBike', false, data.model)
     Wait(300)
     if not netId or netId == 0 or not NetworkDoesEntityExistWithNetworkId(netId) then
         lib.notify({
@@ -278,123 +205,92 @@ RegisterNetEvent("qbx_busjob:client:TakeVehicle", function(data)
 
     SetVehicleFuelLevel(veh, 100.0)
     SetVehicleEngineOn(veh, true, true, false)
+    BikeData.Active = true
+    BikeData.Vehicle = veh
+    BikeData.NetId = netId
     lib.hideContext()
-    TriggerEvent('qbx_busjob:client:DoBusNpc')
+
+    -- Watchdog: release local tracking when the bike dies/drowns/disappears.
+    -- Event-driven via lib.zones-free loop with a generous 2s interval; no per-frame work.
+    CreateThread(function()
+        while BikeData.Active and not isBikeDataVehicleInvalid() do
+            Wait(2000)
+        end
+
+        if BikeData.Active then
+            BikeData.Active = false
+            BikeData.Vehicle = nil
+            BikeData.NetId = nil
+        end
+    end)
 end)
 
--- Events
+RegisterNetEvent('lifestate_ojol:client:driverRevoked', function()
+    -- Fired (server) while online: revoke authorization immediately.
+    driverRegistered = false
+    driverOnline = false
+
+    lib.notify({
+        title = 'Ojol',
+        description = 'Registrasi Ojol kamu dicabut.',
+        type = 'error'
+    })
+end)
+
+RegisterNetEvent('lifestate_ojol:client:dutyChanged', function(online)
+    -- Server confirms a clock-in/out done through the NPWD app so the local
+    -- authorization mirror never drifts from the server state.
+    driverOnline = online == true
+end)
+
+RegisterNetEvent('lifestate_ojol:client:driverStateChanged', function(state)
+    -- Registration/reactivation pushed by the server: a driver hired (or hired back)
+    -- while already online gets dispatcher access without reconnecting.
+    if type(state) ~= 'table' then return end
+    driverRegistered = state.registered == true
+    driverOnline = state.online == true
+end)
+
+-- Resource / player lifecycle -----------------------------------------------
+
+---Refresh the local driver mirror from the server. Event-driven: only on load,
+---resource restart and revocation - never polled.
+local function refreshDriverState()
+    local state = lib.callback.await('lifestate_ojol:server:getDriverState', false)
+    if state then
+        driverRegistered = state.registered == true
+        driverOnline = state.online == true
+    else
+        driverRegistered = false
+        driverOnline = false
+    end
+end
+
 AddEventHandler('onResourceStart', function(resourceName)
-    -- handles script restarts
     if GetCurrentResourceName() ~= resourceName then return end
 
     updateBlip()
     updateZone()
+    CreateThread(refreshDriverState)
 end)
 
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
-    updateBlip()
-    updateZone()
+    CreateThread(refreshDriverState)
 end)
 
 RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
-
-    updateBlip()
-    updateZone()
+    driverRegistered = false
+    driverOnline = false
 end)
 
-RegisterNetEvent('QBCore:Player:SetPlayerData', function()
+AddEventHandler('onResourceStop', function(resourceName)
+    if GetCurrentResourceName() ~= resourceName then return end
 
-    updateBlip()
-    updateZone()
-end)
-
-RegisterNetEvent('qbx_busjob:client:DoBusNpc', function()
-    if not isPlayerVehicleABus() then
-        lib.notify({
-            title = locale('info.bus_job'),
-            description = locale('error.not_in_bus'),
-            type = 'error'
-        })
-        return
+    if dispatcherPed and DoesEntityExist(dispatcherPed) then
+        exports.ox_target:removeLocalEntity(dispatcherPed)
+        DeletePed(dispatcherPed)
+        dispatcherPed = nil
     end
 
-    if not NpcData.Active then
-        local Gender = math.random(1, #config.npcSkins)
-        local PedSkin = math.random(1, #config.npcSkins[Gender])
-        local model = joaat(config.npcSkins[Gender][PedSkin])
-        lib.requestModel(model, 10000)
-        NpcData.Npc = CreatePed(3, model, sharedConfig.npcLocations.locations[route].x, sharedConfig.npcLocations.locations[route].y, sharedConfig.npcLocations.locations[route].z - 0.98, sharedConfig.npcLocations.locations[route].w, false, true)
-        SetModelAsNoLongerNeeded(model)
-        PlaceObjectOnGroundProperly(NpcData.Npc)
-        FreezeEntityPosition(NpcData.Npc, true)
-        removeNPCBlip()
-        NpcData.NpcBlip = AddBlipForCoord(sharedConfig.npcLocations.locations[route].x, sharedConfig.npcLocations.locations[route].y, sharedConfig.npcLocations.locations[route].z)
-        SetBlipColour(NpcData.NpcBlip, 3)
-        SetBlipRoute(NpcData.NpcBlip, true)
-        SetBlipRouteColour(NpcData.NpcBlip, 3)
-        NpcData.LastNpc = route
-        NpcData.Active = true
-        local inRange = false
-        local shownTextUI = false
-        pickupZone = lib.zones.sphere({
-            name = "qbx_busjob_bus_pickup",
-            coords = vec3(sharedConfig.npcLocations.locations[route].x, sharedConfig.npcLocations.locations[route].y, sharedConfig.npcLocations.locations[route].z),
-            radius = 5,
-            debug = config.debugPoly,
-            onEnter = function()
-                inRange = true
-                if not shownTextUI then
-                    lib.showTextUI(locale('info.busstop_text'))
-                    shownTextUI = true
-                end
-                CreateThread(function()
-                    repeat
-                        Wait(0)
-                        if IsControlJustPressed(0, 38) then
-                            local maxSeats, freeSeat = GetVehicleModelNumberOfSeats(GetEntityModel(cache.vehicle))
-
-                            for i = maxSeats - 1, 0, -1 do
-                                if IsVehicleSeatFree(cache.vehicle, i) then
-                                    freeSeat = i
-                                    break
-                                end
-                            end
-
-                            if not freeSeat then return end
-
-                            ClearPedTasksImmediately(NpcData.Npc)
-                            FreezeEntityPosition(NpcData.Npc, false)
-                            TaskEnterVehicle(NpcData.Npc, cache.vehicle, -1, freeSeat, 1.0, 0)
-                            Wait(3000)
-                            lib.notify({
-                                title = locale('info.bus_job'),
-                                description = locale('info.goto_busstop'),
-                                type = 'info'
-                            })
-                            removeNPCBlip()
-                            getDeliveryLocation()
-                            NpcData.NpcTaken = true
-                            TriggerServerEvent('qbx_busjob:server:NpcPay')
-                            lib.hideTextUI()
-                            shownTextUI = false
-                            pickupZone:remove()
-                            pickupZone = nil
-                            break
-                        end
-                    until not inRange
-                end)
-            end,
-            onExit = function()
-                lib.hideTextUI()
-                shownTextUI = false
-                inRange = false
-            end
-        })
-    else
-        lib.notify({
-            title = locale('info.bus_job'),
-            description = locale('error.already_driving_bus'),
-            type = 'info'
-        })
-    end
+    removeBusBlip()
 end)

@@ -1,9 +1,9 @@
 fx_version 'cerulean'
 game 'gta5'
 
-description 'QBX_BusJob'
-repository 'https://github.com/Qbox-project/qbx_busjob'
-version '1.0.0'
+description 'Lifestate Ojol Profession Foundation'
+repository 'https://github.com/AimJax/Lifestate-FiveM'
+version '0.3.0'
 
 ox_lib 'locale'
 
@@ -14,10 +14,15 @@ shared_scripts {
 
 client_scripts {
     '@qbx_core/modules/playerdata.lua',
-    'client/main.lua'
+    'client/main.lua',
+    'client/customer.lua',
+    'client/driver.lua'
 }
 
-server_script 'server/main.lua'
+server_scripts {
+    '@oxmysql/lib/MySQL.lua',
+    'server/main.lua'
+}
 
 files {
     'locales/*.json',
@@ -27,7 +32,9 @@ files {
 
 dependencies {
     'qbx_core',
-    'ox_lib'
+    'ox_lib',
+    'oxmysql',
+    'ox_target'
 }
 
 lua54 'yes'
