@@ -13,6 +13,11 @@ local h = require 'tests.harness'
 local DRIVER_AT_PICKUP = { x = 100, y = 100, z = 30 }
 local CUSTOMER = { x = 100, y = 100, z = 30 }
 
+---Where the customer ends up when they move mid-request. Far outside
+---maxPickupSnapMeters (75 m) from CUSTOMER, so the two positions can never be
+---confused for one another.
+local CUSTOMER_ELSEWHERE = { x = 900, y = 100, z = 30 }
+
 local function freshState()
     return {
         players = {
@@ -28,6 +33,7 @@ local function freshState()
         compensationPaid = 0,
         roadPickup = { x = 120, y = 100, z = 30 },
         roadSnapReason = nil,
+        duringRoadSnap = nil,
         db = {},
     }
 end
@@ -174,6 +180,12 @@ local function loadRides(state)
     package.preload['server.roadsnap'] = function()
         return {
             Request = function()
+                -- Runs while the round trip is in flight. This is where a test
+                -- moves (or removes) the customer, so the recovery's proximity
+                -- check is exercised against where they are when the answer
+                -- arrives - not where they were when the request was sent.
+                if state.duringRoadSnap then state.duringRoadSnap() end
+
                 if state.roadSnapReason then return nil, state.roadSnapReason end
                 return state.roadPickup
             end,
@@ -599,6 +611,78 @@ h.test('a recovery point that is not sane fails the recovery', function()
     h.eq(ok, false, 'cancel result')
     h.eq(reason, 'unsafe_recovery_pickup', 'reason')
     h.eq(ride.status, rides.STATES.FAILED, 'ride closed')
+end)
+
+h.test('a customer who moves during the round trip is validated where they now are', function()
+    local rides, drivers, state = setup()
+    local ride = acceptAndBoard(rides, state)
+
+    -- The answer is a road point next to where the customer moved to while the
+    -- request was in flight. It sits ~810 m from where they started, so judging
+    -- it against a pre-request sample would refuse a perfectly good recovery.
+    state.duringRoadSnap = function()
+        state.players.customer = { x = CUSTOMER_ELSEWHERE.x, y = CUSTOMER_ELSEWHERE.y, z = CUSTOMER_ELSEWHERE.z }
+    end
+    state.roadPickup = { x = 910, y = 100, z = 30 }
+
+    local staged
+    state.db.reopenRideRecalculated = function(_, values) staged = values return 1 end
+
+    local rematches = dispatched(state, 'lifestate_ojol:server:rideSearching')
+    h.eq(select(1, rides.DriverCancel('driver', 'manual_driver_cancel')), true, 'cancel result')
+
+    h.eq(staged ~= nil, true, 'recovery persisted')
+    h.eq(staged.pickup.x, 910, 'persisted pickup is the fresh road point')
+    h.eq(ride.pickup.x, 910, 'runtime pickup follows persistence')
+    h.eq(ride.status, rides.STATES.SEARCHING, 'ride reopened')
+    h.eq(rides.DriverActiveRide.driver, nil, 'driver released')
+    h.eq(drivers.BusyDrivers.driver, nil, 'driver available again')
+    h.eq(dispatched(state, 'lifestate_ojol:server:rideSearching'), rematches + 1, 'rematch event')
+    h.eq(#state.stats, 1, 'cancellation statistics')
+    h.eq(state.stats[1], 'cancelled_after_pickup', 'statistic column')
+end)
+
+h.test('a road point near where the customer used to be is refused', function()
+    local rides, _, state = setup()
+    local ride = acceptAndBoard(rides, state)
+
+    -- The customer moved away, and the answer is a point next to their OLD
+    -- position: 10 m from where they were, 790 m from where they are now. Judged
+    -- against a pre-request sample it would sail through.
+    state.duringRoadSnap = function()
+        state.players.customer = { x = CUSTOMER_ELSEWHERE.x, y = CUSTOMER_ELSEWHERE.y, z = CUSTOMER_ELSEWHERE.z }
+    end
+    state.roadPickup = { x = 110, y = 100, z = 30 }
+
+    local rematches = dispatched(state, 'lifestate_ojol:server:rideSearching')
+    local ok, reason = rides.DriverCancel('driver', 'manual_driver_cancel')
+
+    h.eq(ok, false, 'cancel result')
+    h.eq(reason, 'unsafe_recovery_pickup', 'reason')
+    h.eq(ride.status, rides.STATES.FAILED, 'ride closed')
+    h.eq(ride.pickup.x, CUSTOMER.x, 'pickup never replaced with the stale-position point')
+    h.eq(rides.DriverActiveRide.driver, nil, 'driver released')
+    h.eq(dispatched(state, 'lifestate_ojol:server:rideSearching'), rematches, 'no rematch')
+    h.eq(#state.stats, 0, 'no cancellation statistic')
+end)
+
+h.test('a customer who vanishes after answering cannot be recovered', function()
+    local rides, _, state = setup()
+    local ride = acceptAndBoard(rides, state)
+
+    -- The answer arrives, then the ped is gone before the server judges it.
+    state.duringRoadSnap = function() state.players.customer = nil end
+    state.roadPickup = { x = 120, y = 100, z = 30 }
+
+    local rematches = dispatched(state, 'lifestate_ojol:server:rideSearching')
+    local ok, reason = rides.DriverCancel('driver', 'manual_driver_cancel')
+
+    h.eq(ok, false, 'cancel result')
+    h.eq(reason, 'customer_offline', 'reason')
+    h.eq(ride.status, rides.STATES.FAILED, 'ride closed')
+    h.eq(ride.pickup.x, CUSTOMER.x, 'pickup untouched')
+    h.eq(rides.DriverActiveRide.driver, nil, 'driver released')
+    h.eq(dispatched(state, 'lifestate_ojol:server:rideSearching'), rematches, 'no rematch')
 end)
 
 h.test('an unresponsive client fails the recovery instead of trusting raw ped coordinates', function()

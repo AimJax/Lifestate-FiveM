@@ -803,31 +803,40 @@ end
 ---The road-node lookup exists only on the client (CfxLua exposes no server-side
 ---vehicle nodes), so the customer's client proposes the point. It is not
 ---trusted: the proposal must be sane AND within maxPickupSnapMeters of the
----position the server itself sees for that ped, otherwise there is no recovery.
----There is deliberately NO fallback to the raw ped coordinate - a recovery that
----cannot find a trustworthy road point fails, and the caller closes the ride
----rather than restarting it from an arbitrary position.
+---position the server itself sees for that ped - read AFTER the answer arrives,
+---never before the request, so the comparison is against where the customer
+---actually is rather than where they were when the round trip started. There is
+---deliberately NO fallback to the raw ped coordinate - a recovery that cannot
+---find a trustworthy road point fails, and the caller closes the ride rather
+---than restarting it from an arbitrary position.
 ---
 ---Nothing is mutated here, so a refusal leaves the ride exactly as it was.
 ---@param ride table
 ---@return table? recovery staged { pickup, distanceMeters, fare, driverPayout, companyFee }
 ---@return string? reason
 local function prepareAbandonRecovery(ride)
-    local customerCoords = drivers.GetPlayerCoordsByCitizenid(ride.customerCitizenid)
-    if not customerCoords then return nil, 'customer_offline' end
-
-    -- Bounded round trip: roadsnap always settles - on the answer, on the
-    -- deadline or on the customer dropping - so this ride's lifecycle lock can
-    -- never be held indefinitely by an unresponsive client.
+    -- The round trip comes FIRST, before any position is read: the customer can
+    -- move while the request is in flight, so a position sampled here would
+    -- already be stale by the time an answer arrives. Bounded, because roadsnap
+    -- always settles - on the answer, on the deadline or on the customer
+    -- dropping - so this ride's lifecycle lock can never be held indefinitely by
+    -- an unresponsive client. A missing customer source is reported by the round
+    -- trip itself, as `customer_offline`.
     local proposed, reason = roadsnap.Request(ride.customerCitizenid, serverConfig.roadSnapTimeoutMs)
     if not proposed then return nil, reason or 'unsafe_recovery_pickup' end
 
-    -- The answer is only a candidate: the point must still be sane and next to
-    -- the position the server itself sees for that ped, re-read now (the
-    -- customer may have moved during the round trip).
+    -- The answer is only a candidate, and its shape is checked before anything
+    -- else is read.
     if not isSanePoint(proposed) then return nil, 'unsafe_recovery_pickup' end
 
-    if horizontalDistance(proposed, customerCoords) > sharedConfig.maxPickupSnapMeters then
+    -- Proximity is judged against the position the server sees for the ped NOW.
+    -- Comparing against a pre-request sample would accept a point next to where
+    -- the customer used to be while refusing one next to where they actually
+    -- are. If the ped is gone at this point, the request is not recoverable.
+    local currentCoords = drivers.GetPlayerCoordsByCitizenid(ride.customerCitizenid)
+    if not currentCoords then return nil, 'customer_offline' end
+
+    if horizontalDistance(proposed, currentCoords) > sharedConfig.maxPickupSnapMeters then
         return nil, 'unsafe_recovery_pickup'
     end
 
