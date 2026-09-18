@@ -1,0 +1,17 @@
+# Unified diff of our NPWD patch vs shipped upstream 3.15.1-beta.2.
+#
+# File: dist/html/assets/index-ebf41f23.js (minified single-line bundle, so this
+# records line fragments rather than classical hunks). The shipped fragments no
+# longer exist in the installed bundle; each pair below is verified against it.
+
+@@ fragment 1: read the config key (inside Cn(), beside the icon-set read) @@
+-i=Vg().iconSet.value,t=p6(()=>Lle.map(s=>{
++i=Vg().iconSet.value,npwdDis=Ve(wi.resourceConfig)?.disabledApps||[],t=p6(()=>Lle.map(s=>{
+
+@@ fragment 2: grid icon hidden for a disabled app (first isDisabled site) @@
+-isDisabled:s.disable:{
++isDisabled:s.disable||npwdDis.includes(s.id)}:{
+
+@@ fragment 3: route skipped for a disabled app + memo re-derives on config change @@
+-isDisabled:s.disable}}),[e,i,a])
++isDisabled:s.disable||npwdDis.includes(s.id)}}),[e,i,a,npwdDis])

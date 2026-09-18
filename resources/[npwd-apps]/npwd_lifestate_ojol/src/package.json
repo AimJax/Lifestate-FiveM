@@ -1,0 +1,19 @@
+{
+  "name": "npwd_lifestate_ojol",
+  "version": "1.0.0",
+  "description": "Lifestate Ojol app for NPWD",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "@originjs/vite-plugin-federation": "^1.3.1",
+    "vite": "^5.0.0"
+  }
+}

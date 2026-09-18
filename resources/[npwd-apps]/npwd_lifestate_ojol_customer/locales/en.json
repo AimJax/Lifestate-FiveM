@@ -1,0 +1,10 @@
+{
+    "app_name": "Ojol",
+    "order_now": "PESAN OJOL",
+    "cancel_order": "BATALKAN",
+    "searching": "MENCARI DRIVER...",
+    "driver_found": "Driver ditemukan",
+    "use_waypoint": "GUNAKAN WAYPOINT",
+    "cash": "TUNAI",
+    "bank": "TRANSFER"
+}

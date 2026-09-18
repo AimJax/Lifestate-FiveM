@@ -1,4 +1,49 @@
-# Secrets and credentials
+# ============================================================================
+# Lifestate FiveM - server-side repository
+#
+# WHITELIST layout: everything is ignored by default except the custom
+# Lifestate resources listed below. The Qbox framework, ox libraries, NPWD
+# itself, voice/cfx assets, cache and server configuration stay untracked.
+#
+# The only third-party files tracked here are the NPWD UI bundle patch files
+# (see patches/npwd/README.md for exactly why and what changed).
+# ============================================================================
+
+# --- Ignore everything by default -------------------------------------------
+/*
+
+# --- Re-entry points ---------------------------------------------------------
+!.gitignore
+!README.md
+!patches/
+
+# --- Custom Lifestate resources (all of these are ours) ----------------------
+# NOTE: resource group dirs are literally named like "[lifestate]"; the brackets
+# must be escaped, otherwise git reads them as glob character classes.
+!resources/
+resources/*
+!resources/\[lifestate\]/
+!resources/\[npwd-apps\]/
+resources/\[lifestate\]/*
+!resources/\[lifestate\]/lifestate_ojol/
+!resources/\[lifestate\]/lifestate_pcx160/
+resources/\[npwd-apps\]/*
+!resources/\[npwd-apps\]/npwd_lifestate_ojol/
+!resources/\[npwd-apps\]/npwd_lifestate_ojol_customer/
+!resources/\[npwd-apps\]/npwd_lifestate_app_store/
+
+# --- Server configuration: NEVER tracked (secrets, endpoints, keys) ----------
+server.cfg
+server.cfg.bkp
+permissions.cfg
+ox.cfg
+voice.cfg
+misc.cfg
+*.cfg.bkp
+.replxx_history
+myLogo.png
+
+# --- Secrets and credentials (defence in depth, applies inside the whitelist) -
 .env
 .env.*
 !.env.example
@@ -9,27 +54,29 @@
 *.pfx
 *.key
 
-# Logs, databases, and runtime data
+# --- Logs, databases, dumps, runtime state -----------------------------------
 *.log
-*.sql
+*.sql.gz
 *.sqlite
 *.sqlite3
+*.rpf.db
 cache/
 **/cache/
 logs/
+crash*/
+dumps/
 tmp/
 temp/
+txData_backup*/
 
-# Dependencies and generated output
+# --- Dependencies and build junk ---------------------------------------------
 node_modules/
-build/
-dist/
 .cache/
 coverage/
 __pycache__/
 *.py[cod]
 
-# Editor and OS files
+# --- Editor and OS files ------------------------------------------------------
 .idea/
 .vscode/
 *.code-workspace

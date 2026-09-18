@@ -1,0 +1,13 @@
+{
+    "app_name": "Ojol",
+    "offline": "OFFLINE",
+    "online": "ONLINE",
+    "offline_desc": "Kamu sedang tidak menerima order.",
+    "online_desc": "Kamu siap menerima order.",
+    "start_button": "MULAI NGE-OJOL",
+    "end_button": "SELESAI NGE-OJOL",
+    "not_ojol": "Anda bukan driver Ojol.",
+    "loading": "Memuat...",
+    "error_fetch": "Gagal mengambil status Ojol.",
+    "error_set": "Gagal mengubah status Ojol."
+}

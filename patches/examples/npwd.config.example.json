@@ -1,0 +1,51 @@
+{
+  "PhoneAsItem": {
+    "enabled": true,
+    "exportResource": "qbx_npwd",
+    "exportFunction": "HasPhone"
+  },
+  "customPhoneNumber": { "enabled": false, "exportResource": "", "exportFunction": "" },
+  "general": {
+    "useResourceIntegration": true,
+    "toggleKey": "m",
+    "toggleCommand": "phone",
+    "defaultLanguage": "en",
+    "showId": false,
+    "phoneNumberFormat": "/(\\d{3})(\\d{3})(\\d{4})/"
+  },
+  "contacts": { "frameworkPay": false, "payResource": "", "payFunction": "" },
+  "database": {
+    "useIdentifierPrefix": true,
+    "playerTable": "players",
+    "identifierColumn": "citizenid",
+    "identifierType": "license",
+    "profileQueries": true,
+    "phoneNumberColumn": "phone_number"
+  },
+  "images": {
+    "url": "https://your-image-uploader.example/api/image",
+    "type": "image",
+    "imageEncoding": "webp",
+    "contentType": "multipart/form-data",
+    "useContentType": false,
+    "useWebhook": false,
+    "authorizationHeader": "Authorization",
+    "authorizationPrefix": "",
+    "useAuthorization": true,
+    "returnedDataIndexes": ["url"]
+  },
+  "profanityFilter": { "enabled": true, "badWords": [] },
+  "defaultContacts": [],
+  "disabledApps": ["BROWSER", "MATCH", "DARKCHAT", "TWITTER", "MARKETPLACE"],
+  "apps": [
+    "npwd_qbx_mail",
+    "npwd_qbx_garages",
+    "npwd_lifestate_app_store"
+  ],
+  "voiceMessage": {
+    "enabled": false,
+    "authorizationHeader": "Authorization",
+    "url": "",
+    "returnedDataIndexes": ["url"]
+  }
+}
