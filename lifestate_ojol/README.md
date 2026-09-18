@@ -131,6 +131,23 @@ restarts, when the phone opens, and whenever the server pushes `phoneAppsChanged
 managed ids are also stripped out of the base list at runtime, so config.json cannot re-preinstall
 them. Driver eligibility is enforced in `phoneapps.IsEligible` - never from the client.
 
+The store front-end (`npwd_lifestate_app_store`) is an icon grid plus a per-app detail page, so the
+storefront stays compact as the catalog grows: tapping a tile opens the actions (INSTALL, or
+UNINSTALL + a pointer to the home screen for installed apps). It offers no OPEN button, because
+NPWD's `npwd:openApp` resolves ids against its **built-in** registry only and cannot route an
+external app; opening an installed app is done by tapping its home-screen icon.
+
+### NPWD built-in apps cannot be uninstalled
+
+NPWD's own apps - `DIALER`, `BROWSER`, `MESSAGES`, `DARKCHAT` (IRC), `CONTACTS`, `CALCULATOR`,
+`SETTINGS`, `MATCH` (Matchmaker), `TWITTER`, `MARKETPLACE`, `NOTES`, `CAMERA` - are a hard-coded
+array in `dist/html/assets/index-*.js`, not external resources, so `config.apps` cannot remove them.
+The home grid is assembled as `items: [...builtIns, ...externalApps]` with no filter, and
+`npwd/config.json`'s `disabledApps` key exists in NPWD's own default schema but is read by nothing in
+this build (`grep -c disabledApps` = 1 per bundle, and that one occurrence is the defaults object).
+Hiding a built-in needs NPWD's `isDisabled` flag, which is set only from an entry's hard-coded
+`disable` key. `disabledApps` being inert is why the store cannot yet manage them.
+
 ## Cancellation rules
 
 - Customer cancels: free (Rp0) while searching or before the driver has made meaningful progress.
