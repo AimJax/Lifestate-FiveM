@@ -246,7 +246,6 @@ function App() {
         onUninstall: (appId) => act(appId, "uninstall")
       }
     ),
-    apps && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.footer, children: store2 && store2.driverRegistered ? "Kamu terdaftar sebagai driver Ojol." : "Daftar sebagai driver Ojol lewat CEO untuk memasang aplikasi Driver." }),
     error && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.error, children: error })
   ] }) });
 }
@@ -398,11 +397,6 @@ const styles = {
     fontSize: "11px",
     marginTop: "8px",
     textAlign: "center"
-  },
-  footer: {
-    color: "#8b978f",
-    fontSize: "11px",
-    marginTop: "16px"
   },
   button: {
     width: "100%",

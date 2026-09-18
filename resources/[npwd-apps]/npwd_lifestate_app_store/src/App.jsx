@@ -243,14 +243,6 @@ function App() {
           />
         )}
 
-        {apps && (
-          <div style={styles.footer}>
-            {store && store.driverRegistered
-              ? 'Kamu terdaftar sebagai driver Ojol.'
-              : 'Daftar sebagai driver Ojol lewat CEO untuk memasang aplikasi Driver.'}
-          </div>
-        )}
-
         {error && <div style={styles.error}>{error}</div>}
       </div>
     </div>
@@ -405,11 +397,6 @@ const styles = {
     fontSize: '11px',
     marginTop: '8px',
     textAlign: 'center'
-  },
-  footer: {
-    color: '#8b978f',
-    fontSize: '11px',
-    marginTop: '16px'
   },
   button: {
     width: '100%',
