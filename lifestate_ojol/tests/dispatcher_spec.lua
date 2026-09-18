@@ -21,7 +21,8 @@ local h = require 'tests.harness'
 
 local MODEL_HASH = joaat('s_m_m_gentransport')
 
-local CONFIGURED = { x = 450.91, y = -636.37, z = 28.52, w = 269.62 }
+-- Mirrors the shipped config/shared.lua dispatcher coords (ground-measured Z).
+local CONFIGURED = { x = 450.91, y = -636.37, z = 27.51, w = 269.62 }
 
 local CONFIG = {
     dispatcherLocation = CONFIGURED,

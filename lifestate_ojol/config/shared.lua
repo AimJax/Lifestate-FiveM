@@ -1,7 +1,7 @@
 return {
     location = vec4(462.22, -641.15, 28.45, 175.0),
 
-    dispatcherLocation = vec4(450.91, -636.37, 28.52, 269.62),
+    dispatcherLocation = vec4(450.91, -636.37, 27.51, 269.62),
 
     -- Dispatcher ped lifecycle tracing (client/dispatcher.lua). Set to false once
     -- the NPC is confirmed in game; failure logs are printed either way.
