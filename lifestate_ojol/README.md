@@ -113,10 +113,17 @@ An app is visible when it is installed **and** eligible. Firing a driver therefo
 app immediately (eligibility drops, and the install row is cleared so a rehire restores the right to
 install, not the installation). The App Store itself is always present.
 
+Two kinds of app are managed, and NPWD needs a different lever for each:
+
+| Kind | Examples | Registered through |
+| --- | --- | --- |
+| external | `npwd_lifestate_ojol`, `npwd_lifestate_ojol_customer` | `config.apps` (resource ids) |
+| NPWD built-in | `MATCH`, `DARKCHAT`, `TWITTER`, `MARKETPLACE` | `config.disabledApps` |
+
 NPWD 3.15.1-beta.2 has no per-player app registration: the UI renders the home grid from
 `config.apps` in `npwd/config.json`, fetched on mount, and offers no registration API or installed-app
-hook. `server/phoneapps.lua` therefore returns that same config with a per-character `apps` list, and
-`client/phoneapps.lua` hands it to NPWD's own export:
+hook. `server/phoneapps.lua` therefore returns that same config with a per-character `apps` **and**
+`disabledApps` list, and `client/phoneapps.lua` hands it to NPWD's own export:
 
 ```lua
 exports.npwd:sendNPWDMessage('PHONE', 'npwd:setPhoneConfig', config)
@@ -129,7 +136,10 @@ restarts, when the phone opens, and whenever the server pushes `phoneAppsChanged
 
 `npwd/config.json` lists only `npwd_qbx_mail`, `npwd_qbx_garages` and `npwd_lifestate_app_store`;
 managed ids are also stripped out of the base list at runtime, so config.json cannot re-preinstall
-them. Driver eligibility is enforced in `phoneapps.IsEligible` - never from the client.
+them. Its `disabledApps` list starts every character with the browser and the four optional built-ins
+hidden, which also covers the moment before our per-character push lands. Anything an admin disables
+there is preserved, except the ids this resource owns - the install row decides those. Driver
+eligibility is enforced in `phoneapps.IsEligible` - never from the client.
 
 The store front-end (`npwd_lifestate_app_store`) is an icon grid plus a per-app detail page, so the
 storefront stays compact as the catalog grows: tapping a tile opens the actions (INSTALL, or
@@ -137,16 +147,38 @@ UNINSTALL + a pointer to the home screen for installed apps). It offers no OPEN 
 NPWD's `npwd:openApp` resolves ids against its **built-in** registry only and cannot route an
 external app; opening an installed app is done by tapping its home-screen icon.
 
-### NPWD built-in apps cannot be uninstalled
+### Hiding NPWD's built-in apps (the one NPWD patch)
 
 NPWD's own apps - `DIALER`, `BROWSER`, `MESSAGES`, `DARKCHAT` (IRC), `CONTACTS`, `CALCULATOR`,
 `SETTINGS`, `MATCH` (Matchmaker), `TWITTER`, `MARKETPLACE`, `NOTES`, `CAMERA` - are a hard-coded
-array in `dist/html/assets/index-*.js`, not external resources, so `config.apps` cannot remove them.
-The home grid is assembled as `items: [...builtIns, ...externalApps]` with no filter, and
-`npwd/config.json`'s `disabledApps` key exists in NPWD's own default schema but is read by nothing in
-this build (`grep -c disabledApps` = 1 per bundle, and that one occurrence is the defaults object).
-Hiding a built-in needs NPWD's `isDisabled` flag, which is set only from an entry's hard-coded
-`disable` key. `disabledApps` being inert is why the store cannot yet manage them.
+array (`Lle`) in `dist/html/assets/index-*.js`, not external resources, so `config.apps` cannot
+remove them; the home grid is just `items: [...builtIns, ...externalApps]` with no filter. NPWD does
+have the right switch: an app whose `isDisabled` is true is skipped by **both** the grid and the
+router, so it is genuinely unlaunchable rather than CSS-hidden. In 3.15.1-beta.2 the only input to
+that switch is a hard-coded `disable` key, and NPWD's own `disabledApps` config key - present in its
+default schema - is read by nothing (`grep -c disabledApps` = 1 per bundle, and that hit is the
+defaults object).
+
+The bundle is therefore patched, in one place, to make NPWD honour its own config key:
+
+```js
+// shipped:                 isDisabled: s.disable
+// patched:                 isDisabled: s.disable || npwdDis.includes(s.id)
+// where npwdDis is read alongside the icon set:  Ve(wi.resourceConfig)?.disabledApps || []
+```
+
+`isDisabled` is used twice inside that map (grid + route) and once more in the memo dependency list,
+so all three sites are patched and the icons re-derive when the config atom changes.
+
+Three consequences worth knowing:
+
+- This edits NPWD's **compiled** output, not its source. Updating or reinstalling NPWD reverts it,
+  and the built-ins come back. `.freebuff/luacheck/negative_check.mjs` fails loudly if the anchors
+  disappear, so the regression is caught rather than discovered in game.
+- The hook's runtime behaviour cannot be exercised headlessly (the bundle needs the phone DOM and the
+  federation runtime), so it is proven structurally: each guard reverts the anchor in a copy and
+  asserts the behaviour disappears.
+- Everything else about NPWD is untouched - no other line in any bundle was changed.
 
 ## Cancellation rules
 

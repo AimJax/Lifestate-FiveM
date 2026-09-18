@@ -20,6 +20,32 @@ local STORE = 'npwd_lifestate_app_store'
 local OJOL_CUSTOMER = 'npwd_lifestate_ojol_customer'
 local OJOL_DRIVER = 'npwd_lifestate_ojol'
 
+-- NPWD built-ins: compiled into the phone UI, hidden through `disabledApps`.
+local MATCHMAKER = 'MATCH'
+local IRC = 'DARKCHAT'
+local SOCIAL = 'TWITTER'
+local MARKETPLACE = 'MARKETPLACE'
+
+local BUILTINS = { MATCHMAKER, IRC, SOCIAL, MARKETPLACE }
+
+---The four built-ins a fresh character must not see on the home screen.
+---Self-contained on purpose: the spec's `has` helper is declared further down.
+---@param config table
+---@return string[] hidden
+local function hiddenBuiltins(config)
+    local set = {}
+    local list = config.disabledApps
+    if type(list) == 'table' then
+        for i = 1, #list do set[list[i]] = true end
+    end
+
+    local hidden = {}
+    for i = 1, #BUILTINS do
+        if set[BUILTINS[i]] then hidden[#hidden + 1] = BUILTINS[i] end
+    end
+    return hidden
+end
+
 local CHARACTER = 'citizen-a'
 local OTHER_CHARACTER = 'citizen-b'
 
@@ -153,6 +179,7 @@ local function reset()
     host.parsedConfig = {
         general = { defaultLanguage = 'en' },
         apps = { 'npwd_qbx_mail', 'npwd_qbx_garages', STORE },
+        disabledApps = { 'BROWSER' },
     }
 
     phoneapps.Forget(CHARACTER)
@@ -183,14 +210,91 @@ h.test('a fresh character sees only the App Store (never the Ojol apps)', functi
     h.eq(config.general.defaultLanguage, 'en', 'the rest of the NPWD config is preserved')
 end)
 
+h.test('a fresh character has every optional built-in disabled', function()
+    reset()
+
+    local config = phoneapps.BuildNpwdConfig(CHARACTER)
+
+    h.eq(#hiddenBuiltins(config), 4, 'all four built-ins hidden')
+    for i = 1, #BUILTINS do
+        h.eq(has(config.apps, BUILTINS[i]), false, 'built-ins never go through `apps`')
+    end
+end)
+
+h.test('a built-in is written to disabledApps, an external app to apps', function()
+    reset()
+
+    -- Every built-in installs for everyone; the Driver app also needs registration.
+    h.eq(phoneapps.Install(CHARACTER, MATCHMAKER), true, 'Matchmaker installable by anyone')
+
+    local config = phoneapps.BuildNpwdConfig(CHARACTER)
+
+    h.eq(has(config.disabledApps, MATCHMAKER), false, 'installed built-in is no longer disabled')
+    h.eq(has(config.disabledApps, IRC), true, 'the others stay disabled')
+    h.eq(#hiddenBuiltins(config), 3, 'exactly three left hidden')
+    h.eq(has(config.apps, MATCHMAKER), false, 'never registered as an external app')
+end)
+
+h.test('an admin disabled app is preserved, but managed ids are ours', function()
+    reset()
+    host.parsedConfig.disabledApps = { 'BROWSER', MATCHMAKER }
+
+    local config = phoneapps.BuildNpwdConfig(CHARACTER)
+
+    h.eq(has(config.disabledApps, 'BROWSER'), true, "the admin's own choice survives")
+    h.eq(has(config.disabledApps, MATCHMAKER), true,
+        'owned id stays disabled until installed, even if config.json said otherwise')
+
+    h.eq(phoneapps.Install(CHARACTER, MATCHMAKER), true, 'install')
+    h.eq(has(phoneapps.BuildNpwdConfig(CHARACTER).disabledApps, MATCHMAKER), false,
+        'our install state wins over config.json')
+    h.eq(has(phoneapps.BuildNpwdConfig(CHARACTER).disabledApps, 'BROWSER'), true, 'browser untouched')
+end)
+
+h.test('no install row means the built-in disappears (no auto-seeding)', function()
+    reset()
+
+    -- A character that had every built-in before the store existed: no rows exist,
+    -- so every built-in is hidden instead of silently retained.
+    local config = phoneapps.BuildNpwdConfig(CHARACTER)
+
+    for i = 1, #BUILTINS do
+        h.eq(has(config.disabledApps, BUILTINS[i]), true, 'hidden: ' .. BUILTINS[i])
+    end
+end)
+
+h.test('a built-in install is per character and survives a restart', function()
+    reset()
+    phoneapps.Install(CHARACTER, SOCIAL)
+    phoneapps.Forget(CHARACTER)
+    dbState.rows[CHARACTER] = { [SOCIAL] = true }
+
+    h.eq(phoneapps.IsVisible(CHARACTER, SOCIAL), true, 'visible for its owner')
+    h.eq(phoneapps.IsVisible(OTHER_CHARACTER, SOCIAL), false, 'not for anyone else')
+    h.eq(has(phoneapps.BuildNpwdConfig(CHARACTER).disabledApps, SOCIAL), false, 'enabled after reload')
+    h.eq(has(phoneapps.BuildNpwdConfig(OTHER_CHARACTER).disabledApps, SOCIAL), true, 'still hidden for others')
+end)
+
+h.test('uninstalling a built-in puts it back into disabledApps', function()
+    reset()
+    phoneapps.Install(CHARACTER, MARKETPLACE)
+    h.eq(has(phoneapps.BuildNpwdConfig(CHARACTER).disabledApps, MARKETPLACE), false, 'enabled')
+    host.clock = host.clock + 5000
+
+    h.eq(phoneapps.Uninstall(CHARACTER, MARKETPLACE), true, 'uninstalled')
+    h.eq(has(phoneapps.BuildNpwdConfig(CHARACTER).disabledApps, MARKETPLACE), true, 'disabled again')
+end)
+
 h.test('managed ids cannot be re-preinstalled through npwd/config.json', function()
     reset()
-    host.parsedConfig.apps = { 'npwd_qbx_mail', OJOL_CUSTOMER, OJOL_DRIVER, STORE }
+    host.parsedConfig.apps = { 'npwd_qbx_mail', OJOL_CUSTOMER, OJOL_DRIVER, STORE, MATCHMAKER }
 
     local config = phoneapps.BuildNpwdConfig(CHARACTER)
 
     h.eq(has(config.apps, OJOL_CUSTOMER), false, 'customer app cannot come from config.json')
     h.eq(has(config.apps, OJOL_DRIVER), false, 'driver app cannot come from config.json')
+    h.eq(has(config.apps, MATCHMAKER), false,
+        'a built-in id in config.json would only make NPWD try to load a missing resource')
 end)
 
 h.test('the App Store is present even if config.json forgets it', function()
@@ -390,7 +494,7 @@ h.test('the store state reports install + eligibility and never a predicate', fu
     local state = phoneapps.BuildStoreState(CHARACTER)
     h.eq(state.storeAppId, STORE, 'store id')
     h.eq(state.driverRegistered, true, 'driver flag')
-    h.eq(#state.apps, 2, 'catalog size')
+    h.eq(#state.apps, 6, 'catalog size: two Ojol apps + four NPWD built-ins')
 
     local customer, driver
     for _, entry in ipairs(state.apps) do
@@ -403,6 +507,36 @@ h.test('the store state reports install + eligibility and never a predicate', fu
     h.eq(driver.installed, false, 'driver not installed')
     h.eq(driver.eligible, true, 'driver eligible while registered')
     h.eq(driver.lockLabel, nil, 'no lock label when eligible')
+end)
+
+h.test('the store lists the built-ins as installable by everyone', function()
+    reset()
+
+    local state = phoneapps.BuildStoreState(CHARACTER)
+
+    for i = 1, #BUILTINS do
+        local found
+        for _, entry in ipairs(state.apps) do
+            if entry.id == BUILTINS[i] then found = entry end
+        end
+
+        h.eq(found ~= nil, true, 'listed: ' .. BUILTINS[i])
+        h.eq(found.eligible, true, 'eligible: ' .. BUILTINS[i])
+        h.eq(found.builtin, true, 'flagged as a built-in: ' .. BUILTINS[i])
+        h.eq(found.installed, false, 'not preinstalled: ' .. BUILTINS[i])
+    end
+end)
+
+h.test('the Ojol apps are not flagged as built-ins', function()
+    reset()
+
+    local state = phoneapps.BuildStoreState(CHARACTER)
+
+    for _, entry in ipairs(state.apps) do
+        if entry.id == OJOL_CUSTOMER or entry.id == OJOL_DRIVER then
+            h.eq(entry.builtin, false, 'external: ' .. entry.id)
+        end
+    end
 end)
 
 h.test('the store state locks the Driver app for a non-driver', function()

@@ -10,6 +10,13 @@
 -- An app is on the home screen when it is installed AND currently eligible. The
 -- App Store itself is always present.
 --
+-- Two kinds of app are managed here, and NPWD needs a different lever for each:
+--   * external apps (the Ojol pair) are FiveM resources, registered through
+--     NPWD's `apps` list, and
+--   * NPWD built-ins (Matchmaker, IRC, Social, Marketplace) are compiled into the
+--     phone UI, so they are hidden through NPWD's `disabledApps` list instead.
+-- Either way the app ends up genuinely unregistered, not CSS-hidden.
+--
 -- That list is turned into NPWD's own resource config here, because NPWD decides
 -- the home screen from `config.apps` (see client/phoneapps.lua for the bridge and
 -- the version-specific reasoning). The client never chooses what it may see.
@@ -27,16 +34,42 @@ M.APP_STORE = 'npwd_lifestate_app_store'
 M.APP_OJOL_CUSTOMER = 'npwd_lifestate_ojol_customer'
 M.APP_OJOL_DRIVER = 'npwd_lifestate_ojol'
 
----Apps this resource owns. They are always stripped out of NPWD's static `apps`
----list and re-added per character, so config.json can never re-preinstall them.
+-- NPWD built-in apps. These are compiled into the phone UI, not resources, so
+-- they can never appear in `config.apps`; NPWD hides them through `disabledApps`
+-- (see the hook documented in the README). Their ids are NPWD's own registry ids,
+-- which is also what the install row stores.
+M.NPWD_MATCHMAKER = 'MATCH'
+M.NPWD_IRC = 'DARKCHAT'
+M.NPWD_SOCIAL = 'TWITTER'
+M.NPWD_MARKETPLACE = 'MARKETPLACE'
+
+---Apps this resource owns, in both directions:
+---  * ids are stripped out of NPWD's static `apps` list, so config.json can never
+---    re-preinstall them, and
+---  * ids are taken out of NPWD's `disabledApps` list, because this resource - not
+---    config.json - decides whether they are installed.
 ---@type table<string, boolean>
 M.MANAGED_APPS = {
     [M.APP_OJOL_CUSTOMER] = true,
     [M.APP_OJOL_DRIVER] = true,
+    [M.NPWD_MATCHMAKER] = true,
+    [M.NPWD_IRC] = true,
+    [M.NPWD_SOCIAL] = true,
+    [M.NPWD_MARKETPLACE] = true,
 }
 
----What the App Store lists. `driverOnly` is evaluated server-side only; the UI
+---Only these end up in NPWD's `disabledApps`; the rest go to `apps`.
+---@type table<string, boolean>
+M.BUILTIN_APPS = {
+    [M.NPWD_MATCHMAKER] = true,
+    [M.NPWD_IRC] = true,
+    [M.NPWD_SOCIAL] = true,
+    [M.NPWD_MARKETPLACE] = true,
+}
+
+---What the App Store lists. `requiresDriver` is evaluated server-side only; the UI
 ---receives the resolved `eligible` flag, never the predicate.
+---@type table[]
 M.CATALOG = {
     {
         id = M.APP_OJOL_CUSTOMER,
@@ -50,7 +83,41 @@ M.CATALOG = {
         description = 'Aplikasi kerja driver Ojol',
         requiresDriver = true,
     },
+    {
+        id = M.NPWD_MATCHMAKER,
+        name = 'Matchmaker',
+        description = 'Cari teman dan pasangan',
+        requiresDriver = false,
+        builtin = true,
+    },
+    {
+        id = M.NPWD_IRC,
+        name = 'IRC',
+        description = 'Ruang obrolan komunitas',
+        requiresDriver = false,
+        builtin = true,
+    },
+    {
+        id = M.NPWD_SOCIAL,
+        name = 'Social',
+        description = 'Berbagi kabar dan foto',
+        requiresDriver = false,
+        builtin = true,
+    },
+    {
+        id = M.NPWD_MARKETPLACE,
+        name = 'Marketplace',
+        description = 'Jual beli barang',
+        requiresDriver = false,
+        builtin = true,
+    },
 }
+
+---@param appId string
+---@return boolean
+function M.IsBuiltin(appId)
+    return M.BUILTIN_APPS[appId] == true
+end
 
 ---Install/uninstall anti-spam (single player spamming the store).
 local ACTION_COOLDOWN_MS = 500
@@ -128,6 +195,10 @@ function M.IsEligible(citizenid, appId)
         if drivers.IsRegisteredDriver(citizenid) then return true end
         return false, 'driver_only'
     end
+
+    -- The NPWD built-ins the store manages are open to everyone; only the Driver
+    -- app has an eligibility rule.
+    if M.BUILTIN_APPS[appId] then return true end
 
     return false, 'unknown_app'
 end
@@ -228,6 +299,7 @@ function M.BuildStoreState(citizenid)
             eligible = eligible,
             -- Shown by the store; the UI never decides eligibility itself.
             requiresDriver = entry.requiresDriver == true,
+            builtin = entry.builtin == true,
         }
 
         -- Explicitly conditional: `eligible and nil or 'label'` would always take
@@ -285,15 +357,36 @@ function M.BuildNpwdConfig(citizenid)
     end
     if not hasStore then apps[#apps + 1] = M.APP_STORE end
 
-    -- Installed + eligible apps only.
+    -- NPWD's own disabled list is preserved verbatim, minus the ids this resource
+    -- owns: an admin's decision to disable the browser must survive, but the
+    -- install state of a managed built-in is ours to decide.
+    local disabled = {}
+    local baseDisabled = base.disabledApps
+    if type(baseDisabled) == 'table' then
+        for i = 1, #baseDisabled do
+            local appId = baseDisabled[i]
+            if type(appId) == 'string' and not M.MANAGED_APPS[appId] then
+                disabled[#disabled + 1] = appId
+            end
+        end
+    end
+
+    -- Installed + eligible apps only. External apps are registered through `apps`;
+    -- NPWD built-ins are hidden through `disabledApps`, so a built-in that is
+    -- installed simply stays out of the disabled list.
     for i = 1, #M.CATALOG do
-        local appId = M.CATALOG[i].id
-        if M.IsVisible(citizenid, appId) then
-            apps[#apps + 1] = appId
+        local entry = M.CATALOG[i]
+        local visible = M.IsVisible(citizenid, entry.id)
+
+        if entry.builtin then
+            if not visible then disabled[#disabled + 1] = entry.id end
+        elseif visible then
+            apps[#apps + 1] = entry.id
         end
     end
 
     config.apps = apps
+    config.disabledApps = disabled
     return config
 end
 
