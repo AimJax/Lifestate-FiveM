@@ -3,6 +3,10 @@ return {
 
     dispatcherLocation = vec4(450.91, -636.37, 28.52, 269.62),
 
+    -- Dispatcher ped lifecycle tracing (client/dispatcher.lua). Set to false once
+    -- the NPC is confirmed in game; failure logs are printed either way.
+    dispatcherDebug = true,
+
     vehicleSpawnLocation = vec4(456.24, -637.95, 27.5, 222.2),
 
     -- Maximum CEO <-> target distance for /daftarojol and /pecatojol.

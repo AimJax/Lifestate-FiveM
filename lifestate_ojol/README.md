@@ -73,6 +73,33 @@ It is re-ensured on resource start, on `QBCore:Client:OnPlayerLoaded`, when `ox_
 thereafter by a single 15 s watchdog (the only way to notice a local deletion - there is no
 entity-deletion event). No per-frame loops.
 
+### Two traps that keep this ped invisible
+
+1. **`type(vec4(...))` is `'vector4'`, never `'table'`.** Validating the config with
+   `type(coords) ~= 'table'` rejects the real `dispatcherLocation` and aborts every spawn attempt.
+   Coordinate containers are therefore validated by field (`x`/`y`/`z`/`w`), which accepts vectors,
+   userdata and plain tables alike. This install proves the rule in ox_lib's `points`/`zones`,
+   `qbx_teleports`, `qbx_core` and in `client/customer.lua` here.
+2. **`lib.requestModel` returns the model hash and RAISES on timeout** (ox_lib
+   `streamingRequest` -> `waitFor` -> `return error(...)`); it never returns `nil`. `not <hash>` is
+   always false, so the return value is not a usable success signal, and an uncaught error would
+   kill the ensure/watchdog thread for good. It runs under `pcall` and the outcome is confirmed with
+   `HasModelLoaded`.
+
+The ped is created at exactly the configured coordinates: no `z` offset and no ground correction.
+
+### Diagnosing it
+
+`dispatcherDebug` in `config/shared.lua` (default `true`) prints the lifecycle trace: module
+`Start()`, each trigger, watchdog arm/first tick, and ped creation with handle, model and the live
+coords read back from the entity. Set it to `false` once the NPC is confirmed in game - failures are
+logged either way, once per distinct reason.
+
+Two admin-only commands exist for live checks (`IsPlayerAceAllowed(..., 'admin')`):
+`/ojoldebugped` prints started/handle/exists/model/dead/target/position/configured/ticks and the last
+failure, and `/ojolrespawnped` deletes and re-creates the ped once. Both are client-local and can be
+removed once the dispatcher is trusted.
+
 ## Lifestate App Store
 
 The Ojol apps are **installable, never preinstalled**. Two facts drive the home screen:
