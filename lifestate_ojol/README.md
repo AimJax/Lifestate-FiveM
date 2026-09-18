@@ -10,7 +10,7 @@ Ojol profession foundation for Lifestate Roleplay (Qbox).
 - Pangkalan Ojek dispatcher with PCX160 bike spawn (requires registered + active + online).
 - Company account foundation (`ojol_company`), 10% platform fee split helpers.
 - NPWD Ojol Driver app (clock in/out, rank, rating, profile photo placeholder).
-- App Store persistence schema (`lifestate_phone_apps`, unused yet).
+- Lifestate App Store (separate NPWD app) with per-character install state in `lifestate_phone_apps`.
 
 ## Phase 3B scope (player-to-player rides)
 
@@ -59,7 +59,50 @@ or code path can jump straight to a terminal state.
 | `lifestate_ojol:server:acceptRideOffer` / `rejectRideOffer` / `cancelDriverRide` / `getDriverRideState` | Driver app. |
 
 Server-pushed client events: `driverStateChanged`, `driverOfferChanged`, `driverRideChanged`,
-`customerRideChanged`, `dutyChanged`, `driverRevoked`.
+`customerRideChanged`, `dutyChanged`, `driverRevoked`, `phoneAppsChanged`.
+
+## Dispatcher ped
+
+`client/dispatcher.lua` owns the Pangkalan Ojek ped (model, placement, invincibility, clipboard
+scenario, ox_target entry); `client/main.lua` only injects what "Ambil Motor" does.
+
+`Ensure()` is idempotent and self-healing. A ped handle is only trusted when the entity exists,
+is alive **and** still carries the loaded model - a ped created before the model streamed exists
+but is invisible, and treating that as success is what used to lose the NPC for the whole session.
+It is re-ensured on resource start, on `QBCore:Client:OnPlayerLoaded`, when `ox_target` restarts, and
+thereafter by a single 15 s watchdog (the only way to notice a local deletion - there is no
+entity-deletion event). No per-frame loops.
+
+## Lifestate App Store
+
+The Ojol apps are **installable, never preinstalled**. Two facts drive the home screen:
+
+| | Meaning |
+| --- | --- |
+| installed | persistent, per character (`lifestate_phone_apps`) |
+| eligible | server predicate; the Driver app also needs an active driver registration |
+
+An app is visible when it is installed **and** eligible. Firing a driver therefore hides the Driver
+app immediately (eligibility drops, and the install row is cleared so a rehire restores the right to
+install, not the installation). The App Store itself is always present.
+
+NPWD 3.15.1-beta.2 has no per-player app registration: the UI renders the home grid from
+`config.apps` in `npwd/config.json`, fetched on mount, and offers no registration API or installed-app
+hook. `server/phoneapps.lua` therefore returns that same config with a per-character `apps` list, and
+`client/phoneapps.lua` hands it to NPWD's own export:
+
+```lua
+exports.npwd:sendNPWDMessage('PHONE', 'npwd:setPhoneConfig', config)
+```
+
+That replaces the config atom the phone renders from, so an uninstalled app is neither shown nor
+routed - it is not CSS-hidden. NPWD core is untouched; the export and the message shape were verified
+against this install's `dist` bundles. Visibility is re-applied on character load, when `npwd`
+restarts, when the phone opens, and whenever the server pushes `phoneAppsChanged`.
+
+`npwd/config.json` lists only `npwd_qbx_mail`, `npwd_qbx_garages` and `npwd_lifestate_app_store`;
+managed ids are also stripped out of the base list at runtime, so config.json cannot re-preinstall
+them. Driver eligibility is enforced in `phoneapps.IsEligible` - never from the client.
 
 ## Cancellation rules
 
@@ -161,7 +204,7 @@ Tables are created automatically on resource start (idempotent). Reference schem
 - `ojol_money_ledger` - durable per-ride fare/compensation ledger (PK: `ledger_id`; indexes on
   `ride_id`, `status`). `status` is `pending` / `processing` / `failed` / `rolled_back` / `paid` /
   `needs_reconciliation`.
-- `lifestate_phone_apps` - per-player installed app state for the future App Store (PK: `citizenid`, `app_id`).
+- `lifestate_phone_apps` - per-character installed app state for the App Store (PK: `citizenid`, `app_id`).
 
 Live ride state is never written per tick; only creation, acceptance and the terminal outcome.
 

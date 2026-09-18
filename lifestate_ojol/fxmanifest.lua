@@ -27,7 +27,10 @@ server_scripts {
 files {
     'locales/*.json',
     'config/client.lua',
-    'config/shared.lua'
+    'config/shared.lua',
+    -- Client modules loaded with require (same convention as config/*).
+    'client/dispatcher.lua',
+    'client/phoneapps.lua'
 }
 
 dependencies {

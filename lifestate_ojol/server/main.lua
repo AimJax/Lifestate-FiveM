@@ -9,6 +9,7 @@ local rides = require 'server.rides'
 local matching = require 'server.matching'
 local payments = require 'server.payments'
 local roadsnap = require 'server.roadsnap'
+local phoneapps = require 'server.phoneapps'
 
 -- Validation helpers --------------------------------------------------------
 
@@ -381,6 +382,55 @@ lib.callback.register('lifestate_ojol:server:submitRating', function(source, pay
     return { success = true, data = { rideId = payload.rideId, rating = payload.rating } }
 end)
 
+-- Lifestate App Store callbacks --------------------------------------------
+-- Ojol apps are installable, never preinstalled. Install state is per character
+-- and every request is re-validated here: the app id, the character behind the
+-- source and driver eligibility all come from the server, never from the client.
+
+---The full NPWD resource config with this character's `apps` list applied. The
+---client forwards it to NPWD's own NUI message (see client/phoneapps.lua).
+lib.callback.register('lifestate_ojol:server:getPhoneAppConfig', function(source)
+    local citizenid = drivers.GetCitizenidBySource(source)
+    if not citizenid then return nil end
+
+    return phoneapps.BuildNpwdConfig(citizenid)
+end)
+
+---Store contents: catalog + install state + eligibility. Read-only.
+lib.callback.register('lifestate_ojol:server:getPhoneApps', function(source)
+    local citizenid = drivers.GetCitizenidBySource(source)
+    if not citizenid then return { success = false, reason = 'invalid_character' } end
+
+    return { success = true, data = phoneapps.BuildStoreState(citizenid) }
+end)
+
+---Install an app. The App Store front-end never sends eligibility - only an id.
+lib.callback.register('lifestate_ojol:server:installPhoneApp', function(source, appId)
+    local citizenid = drivers.ResolveCitizenid(source)
+    if not citizenid then return { success = false, reason = 'invalid_character' } end
+
+    local ok, reason = phoneapps.Install(citizenid, appId)
+    if not ok then return { success = false, reason = reason } end
+
+    -- Home screen updates immediately; no reconnect, no server restart.
+    TriggerClientEvent('lifestate_ojol:client:phoneAppsChanged', source)
+
+    return { success = true, data = phoneapps.BuildStoreState(citizenid) }
+end)
+
+---Uninstall an app (the customer Ojol app stays optional, like any other).
+lib.callback.register('lifestate_ojol:server:uninstallPhoneApp', function(source, appId)
+    local citizenid = drivers.ResolveCitizenid(source)
+    if not citizenid then return { success = false, reason = 'invalid_character' } end
+
+    local ok, reason = phoneapps.Uninstall(citizenid, appId)
+    if not ok then return { success = false, reason = reason } end
+
+    TriggerClientEvent('lifestate_ojol:client:phoneAppsChanged', source)
+
+    return { success = true, data = phoneapps.BuildStoreState(citizenid) }
+end)
+
 -- CEO management commands (temporary V1 commands, all server-authoritative) --
 
 local function notify(src, message, notifyType)
@@ -677,6 +727,9 @@ AddEventHandler('playerDropped', function()
         -- customer's request needs the dropping player's identity.
         rides.HandlePlayerDropped(citizenid)
     end
+
+    -- Phone app install state is persistent, so only the per-session cache goes.
+    if citizenid then phoneapps.Forget(citizenid) end
 
     drivers.CleanupSource(src)
     lastManagerAction[src] = nil

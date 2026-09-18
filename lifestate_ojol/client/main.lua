@@ -1,8 +1,9 @@
 local config = require 'config.client'
 local sharedConfig = require 'config.shared'
+local dispatcher = require 'client.dispatcher'
+local phoneApps = require 'client.phoneapps'
 
 local busBlip = nil
-local dispatcherPed = nil
 
 local BikeData = {
     Active = false,
@@ -73,77 +74,29 @@ local function bikeGarage()
     lib.showContext('lifestate_ojol_open_garage_context_menu')
 end
 
-local function createDispatcher()
-    if dispatcherPed and DoesEntityExist(dispatcherPed) then
+---What "Ambil Motor" does once the dispatcher ped is interacted with. The ped
+---itself (model, placement, invincibility, scenario, ox_target entry) is owned by
+---client/dispatcher.lua; only the gameplay reaction lives here.
+local function takeMotor()
+    if not driverRegistered then
+        lib.notify({
+            title = 'Pangkalan Ojek',
+            description = 'Kamu belum terdaftar sebagai driver Ojol.',
+            type = 'error'
+        })
         return
     end
 
-    local model = `s_m_m_gentransport`
-    lib.requestModel(model, 10000)
+    if not driverOnline then
+        lib.notify({
+            title = 'Pangkalan Ojek',
+            description = 'Kamu belum online. Check-in melalui aplikasi Ojol terlebih dahulu.',
+            type = 'error'
+        })
+        return
+    end
 
-    local coords = sharedConfig.dispatcherLocation
-
-    dispatcherPed = CreatePed(
-        0,
-        model,
-        coords.x,
-        coords.y,
-        coords.z - 1.0,
-        coords.w,
-        false,
-        false
-    )
-
-    SetEntityInvincible(dispatcherPed, true)
-    FreezeEntityPosition(dispatcherPed, true)
-    SetBlockingOfNonTemporaryEvents(dispatcherPed, true)
-
-    SetPedDefaultComponentVariation(dispatcherPed)
-    TaskStartScenarioInPlace(dispatcherPed, 'WORLD_HUMAN_CLIPBOARD', 0, true)
-
-    exports.ox_target:addLocalEntity(dispatcherPed, {
-        {
-            name = 'lifestate_ojol_take_motor',
-            icon = 'fa-solid fa-motorcycle',
-            label = 'Ambil Motor',
-            distance = 2.5,
-
-            canInteract = function()
-                -- Option stays visible to everyone; authorization is enforced on select
-                -- and again server-side. A registered-but-offline driver must be able
-                -- to see the denial message telling them to clock in.
-                return true
-            end,
-
-            onSelect = function()
-                if not driverRegistered then
-                    lib.notify({
-                        title = 'Pangkalan Ojek',
-                        description = 'Kamu belum terdaftar sebagai driver Ojol.',
-                        type = 'error'
-                    })
-                    return
-                end
-
-                if not driverOnline then
-                    lib.notify({
-                        title = 'Pangkalan Ojek',
-                        description = 'Kamu belum online. Check-in melalui aplikasi Ojol terlebih dahulu.',
-                        type = 'error'
-                    })
-                    return
-                end
-
-                bikeGarage()
-            end
-        }
-    })
-
-    SetModelAsNoLongerNeeded(model)
-end
-
-local function updateZone()
-    createDispatcher()
+    bikeGarage()
 end
 
 -- Events --------------------------------------------------------------------
@@ -270,7 +223,6 @@ AddEventHandler('onResourceStart', function(resourceName)
     if GetCurrentResourceName() ~= resourceName then return end
 
     updateBlip()
-    updateZone()
     CreateThread(refreshDriverState)
 end)
 
@@ -286,11 +238,16 @@ end)
 AddEventHandler('onResourceStop', function(resourceName)
     if GetCurrentResourceName() ~= resourceName then return end
 
-    if dispatcherPed and DoesEntityExist(dispatcherPed) then
-        exports.ox_target:removeLocalEntity(dispatcherPed)
-        DeletePed(dispatcherPed)
-        dispatcherPed = nil
-    end
-
+    -- The dispatcher ped and its ox_target registration are owned by
+    -- client/dispatcher.lua, which registers its own onResourceStop cleanup.
     removeBusBlip()
 end)
+
+-- Lifecycle wiring -----------------------------------------------------------
+
+-- Exactly one dispatcher ped, re-created whenever it is missing, broken or was
+-- created before the model could stream. See client/dispatcher.lua.
+dispatcher.Start({ onSelect = takeMotor })
+
+-- Phone app visibility (Ojol apps are installable, not preinstalled).
+phoneApps.Start()

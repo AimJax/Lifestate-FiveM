@@ -789,6 +789,48 @@ function M.ReopenRideRecalculated(rideId, values)
     return 0
 end
 
+-- Phone app install state --------------------------------------------------
+
+---Installed app ids for one character. Keyed by citizenid (Never by source:
+---install state is per character and outlives the session).
+---@param citizenid string
+---@return table<string, boolean> set of app_id
+function M.FetchInstalledApps(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return {} end
+
+    local rows = MySQL.query.await(
+        'SELECT `app_id` FROM `lifestate_phone_apps` WHERE `citizenid` = ? AND `installed` = 1',
+        { citizenid })
+
+    local installed = {}
+    for i = 1, #(rows or {}) do
+        installed[rows[i].app_id] = true
+    end
+
+    return installed
+end
+
+---Persist an install/uninstall transition.
+---Upsert on purpose: an uninstall keeps the row (installed = 0) so a reinstall
+---never needs a fresh identity, and `affectedRows` is NOT used as the success
+---signal because MySQL legitimately reports 0 when a write changes nothing.
+---@param citizenid string
+---@param appId string
+---@param installed boolean
+---@return boolean success
+function M.SetPhoneAppInstalled(citizenid, appId, installed)
+    if type(citizenid) ~= 'string' or citizenid == '' then return false end
+    if type(appId) ~= 'string' or appId == '' then return false end
+
+    local ok = pcall(MySQL.update.await, [[
+        INSERT INTO `lifestate_phone_apps` (`citizenid`, `app_id`, `installed`, `installed_at`)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE `installed` = VALUES(`installed`), `installed_at` = VALUES(`installed_at`)
+    ]], { citizenid, appId, installed and 1 or 0, os.time() })
+
+    return ok == true
+end
+
 -- Company account ---------------------------------------------------------
 
 ---@return number balance in whole Rupiah
