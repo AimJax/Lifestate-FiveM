@@ -2,6 +2,10 @@ local db = require 'server.database'
 
 local M = {}
 
+local function dbBoolean(value)
+    return value == true or value == 1 or value == '1'
+end
+
 -- Runtime state ------------------------------------------------------------
 -- Database = persistence. These tables = live state. Never persisted per tick.
 
@@ -27,7 +31,7 @@ local function buildRuntimeDriver(row)
     return {
         citizenid = row.citizenid,
         rank = row.rank,
-        active = row.active == 1,
+        active = dbBoolean(row.active),
         profilePhoto = row.profile_photo,
         registeredBy = row.registered_by,
         registeredAt = row.registered_at,

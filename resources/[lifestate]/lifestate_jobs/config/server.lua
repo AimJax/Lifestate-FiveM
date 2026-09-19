@@ -20,7 +20,7 @@ return {
     frameworkJobs = {
         enabled = true,
         -- Job names that are never offered (the default job is always excluded).
-        blacklist = {},
+        blacklist = { ojol = true },
         -- When set, only these job names are offered. nil = every job except the
         -- blacklist / default job, which is what makes new Qbox jobs appear in the
         -- admin menu with no code change.
