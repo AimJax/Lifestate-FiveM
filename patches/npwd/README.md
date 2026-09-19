@@ -43,13 +43,30 @@ disabled built-in is genuinely unlaunchable rather than CSS-hidden.
 
 ## Second patch — goBack fallback (phone Back button)
 
-Recorded in [`goBack-fallback.patch`](goBack-fallback.patch): the phone's top
-back arrow, the Backspace handler and every app's header back button all call
-the hash history's `goBack`, which upstream implements as a bare
-`history.go(-1)` with no fallback — it does nothing when the router has no
-previous in-app entry. The patch adds a depth guard: previous entry exists →
-`go(-1)`; at the session's first entry but not `/` → go home (`#/`); already at
-home → no-op. One function, every app fixed.
+Recorded in [`goBack-fallback.patch`](goBack-fallback.patch): the phone's
+bottom-right back chevron, the Backspace handler and every app's header back
+button all call the hash history's `goBack`, which upstream implements as a
+bare `history.go(-1)` with no fallback — it does nothing when the router has
+no previous in-app entry.
+
+**v1 (superseded, failed live):** added a depth guard using the history's
+internal keys array (`A.indexOf(F.location.key)`) and kept the chunk's original
+hashed filename. It never fixed the phone in FiveM because (a) CEF served the
+cached old asset under the same filename and (b) the keys-array depth
+assumption did not hold for live navigation. Do not re-introduce either.
+
+**v2 (current):** route-aware goBack — at `/` no-op; app root (1 path segment)
+→ router push(`/`); nested (2+ segments) → `go(-1)` with a one-shot 120 ms
+unchanged-route fallback to home (covers direct-open nested routes with no
+usable history).
+
+**Cache-busting (mandatory part of the patch):** the patched chunk is renamed
+`__federation_shared_react-router-dom-lifestate-backfix.js` and the single
+reference to the old filename in each of
+`dist/html/assets/index-ebf41f23.js` and
+`dist/html/assets/__federation_fn_import.js` is updated. Never patch a hashed
+bundle chunk in place — CEF will keep serving the stale cached asset even
+after `restart npwd`.
 
 ## Re-applying after an NPWD update
 

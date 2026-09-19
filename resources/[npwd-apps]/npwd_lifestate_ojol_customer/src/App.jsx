@@ -655,7 +655,8 @@ const styles = {
   paymentRow: {
     display: 'flex',
     gap: '10px',
-    marginTop: '10px'
+    marginTop: '10px',
+    marginBottom: '12px'
   },
   paymentOption: {
     flex: 1,
@@ -685,6 +686,7 @@ const styles = {
   warning: {
     color: '#f59e0b',
     fontSize: '12px',
+    marginTop: '10px',
     marginBottom: '12px'
   },
   button: {

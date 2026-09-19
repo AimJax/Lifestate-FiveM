@@ -1,61 +1,75 @@
 # Unified diff of our NPWD patch vs shipped upstream 3.15.1-beta.2.
 #
-# File: dist/html/assets/__federation_shared_react-router-dom-770100b8.js
+# File: dist/html/assets/__federation_shared_react-router-dom-lifestate-backfix.js
 # (federation chunk carrying react-router-dom 5.x and its history package,
 # minified single line). Verified against the installed bundle before applying.
 #
-# PURPOSE — global phone Back-button fix (Defect 3, "back arrow does nothing"):
+# !!! SUPERSEDES the first goBack-fallback patch !!!
 #
-# NPWD renders the whole phone inside <HashRouter> (index bundle:
-# `HashRouter:Z1e}=await C("react-router-dom")`), whose history is the hash
-# history in this chunk: class pt -> history=It(e.props). Its goBack is
+# The FIRST version of this patch added
+#     var npwdIxA=A.indexOf(F.location.key)
+# to goBack and kept the chunk's original hashed filename. BOTH parts failed
+# live:
+#   1. Same filename + FiveM/CEF asset cache => the phone kept running the
+#      UNPATCHED chunk even after `restart npwd`. Never patch a chunk in place;
+#      rename it and update every reference.
+#   2. The keys-array depth assumption (`A.indexOf(F.location.key)`) did not
+#      hold for the live navigation flow, so even the loaded patch could not
+#      fix the back arrow.
 #
-#     function R(d){t.go(d)}function k(){R(-1)}
+# v2 (this patch) = route-aware behavior + cache-busted filename.
 #
-# with t = window.history. There is NO fallback: history.go(-1) with no usable
-# previous entry does nothing, so the phone's top back arrow (U_e: t=()=>{e.goBack()}),
-# the Backspace handler (V0e: ...||e.goBack()) and every per-app header's
-# goBack() all dead-end whenever the router has no previous in-app entry.
-# (Upstream Navigation.tsx `handleGoBackInHistory() { history.goBack() }` is the
-# unminified form of exactly this.)
+# PURPOSE — global phone Back-button fix (bottom-right chevron, Backspace key,
+# and every per-app header back button; they all converge on the hash history's
+# goBack `k()`):
 #
-# The hash history maintains an internal per-history keys array `A` (entries
-# pushed/updated in push w()/replace T()); `F.location` is the current entry,
-# so `A.indexOf(F.location.key)` is the CURRENT DEPTH within this phone
-# session. That gives a deterministic, timer-free fallback:
+#   PATH "/"                     -> no-op (already home; no loop)
+#   APP ROOT (1 segment, e.g. /npwd_lifestate_ojol_customer, /settings)
+#                                -> push("/") i.e. the router's own `w(d,h)`
+#   NESTED PATH (2+ segments, e.g. /npwd_lifestate_app_store/details/ojol)
+#                                -> normal go(-1); 120 ms later, if the route
+#                                   is still IDENTICAL (no usable history
+#                                   entry, e.g. a direct-open nested route),
+#                                   fall back to push("/").
 #
-#   depth > 0            -> go(-1)  (a real previous in-app entry exists,
-#                                    because every in-app push created one)
-#   depth == 0, not "/"" -> go home  (hash becomes #/, landing on the app grid)
-#   depth == 0, at "/"   -> no-op    (already home; no loop)
-#
-# This fixes EVERY app (Ojol customer/driver, App Store, all built-ins) because
-# all goBack call sites converge on this single function. The grid button
-# (n=()=>{a||e.push("/")}) and the center close-phone button (closePhone) are
-# untouched.
+# No browser history.length, no keys-array indexing. `F` is the closure's
+# current-location ref, `R(d)` is `go`, `w(d,h)` is `push` (verified in the
+# installed minified bundle: push writes A.slice/A.push, replace rewrites A[W]).
 
-@@ fragment 1: hash-history goBack gains the depth guard/home fallback @@
+@@ fragment 1: hash-history goBack gains route-aware fallback @@
 -function R(d){t.go(d)}function k(){R(-1)}
-+function R(d){t.go(d)}function k(){var npwdIxA=A.indexOf(F.location.key);npwdIxA>0?R(-1):npwdIxA===0&&F.location.pathname!=="/"&&(window.location.hash="#/")}
++function R(d){t.go(d)}function k(){var npwdP=F.location.pathname;if(npwdP==="/")return;var npwdSeg=npwdP.split("/").filter(Boolean).length;if(npwdSeg<=1){w("/");return}var npwdBefore=F.location.pathname;R(-1);setTimeout(function(){var npwdNow=F.location.pathname;npwdNow===npwdBefore&&w("/")},120)}
+
+@@ fragment 2: cache-busting rename (this is what makes the fix actually load) @@
+-  file: __federation_shared_react-router-dom-770100b8.js
++  file: __federation_shared_react-router-dom-lifestate-backfix.js
+   and the single reference to that filename in EACH of:
+     dist/html/assets/index-ebf41f23.js
+     dist/html/assets/__federation_fn_import.js
 
 # Notes:
-# - `npwdIxA` is deliberately ugly to stay collision-free in the minified scope.
-# - Only the hash history is patched; the memory history (goBack:L ->
-#   function L(){P(-1)}) is left as shipped because nothing in NPWD or the
-#   external apps renders a <MemoryRouter> (grep: MemoryRouter appears only in
-#   this chunk's export list).
-# - window.location.hash="#/" reuses the SAME hash machinery the router already
-#   listens to (hashchange), so no extra event wiring is introduced.
+# - `npwdP`/`npwdSeg`/`npwdBefore`/`npwdNow` are deliberately ugly to stay
+#   collision-free in the minified scope.
+# - The 120 ms check is a one-shot setTimeout, not a polling loop; if go(-1)
+#   navigated, F.location changed and the fallback never fires.
+# - Only the hash history is patched; the memory history goBack (function
+#   L(){P(-1)}) stays as shipped because nothing renders <MemoryRouter>.
+# - The grid button (n=()=>{a||e.push("/")}) and center close button
+#   (closePhone) are untouched.
 
 ## Re-applying after an NPWD update
 #
-# 1. In the new federation chunk (name may change), locate the hash history:
+# 1. In the new federation chunk (name will change), locate the hash history:
 #    grep -oE 'goBack:[A-Za-z0-9_$]+,goForward' <chunk>.js
-#    then find that identifier's definition: function <id>(){<goId>(-1)}
-# 2. Apply the same transformation: before history.go(-1), read the current
-#    entry's index in the history's internal keys array (the variable captured
-#    by push/replace, exposed in the returned history object); > 0 -> go(-1),
-#    == 0 and location.pathname !== "/" -> set window.location.hash = "#/".
-# 3. Restart npwd. Test matrix: back from an app root -> home; back from a
-#    nested screen -> previous screen; repeated back at home -> no freeze,
-#    no loop; grid + close buttons unchanged.
+#    then that identifier's definition: function <id>(){<goId>(-1)}
+# 2. Identify the closure's current-location ref (the variable read as
+#    <ref>.location.pathname in push/replace), the go function (R-style) and
+#    the push function (w-style, the one that slices+pushes the keys array).
+# 3. Apply fragment 1 with those real identifiers. Depth = number of non-empty
+#    path segments; <= 1 and not "/" -> push("/"); nested -> go(-1) + 120 ms
+#    unchanged-route fallback to push("/").
+# 4. RENAME the chunk (fragment 2) and update EVERY reference to the old
+#    filename across dist/html. Do NOT keep the original filename: CEF will
+#    serve the stale cached asset and the patch will silently not run.
+# 5. Restart npwd. Verify the back arrow works BEFORE blaming the algorithm —
+#    if it still does nothing, the old filename is being served.
