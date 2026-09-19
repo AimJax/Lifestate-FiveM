@@ -17,6 +17,13 @@ local M = {}
 ---~50 position refreshes.
 M.DefaultCellSize = 2000
 
+---Default safety halo in metres for queries over MOVING entries (drivers).
+---Justification: index positions refresh every 2000 ms and a fast bike covers
+---~40-50 m/s, so a driver moves at most ~100 m between refreshes; 250 m covers
+---that plus one extra tick of server scheduling jitter. The halo only widens
+---the candidate superset - the authoritative live-distance check still decides.
+M.DefaultHaloMeters = 250
+
 ---@param cellSize number|nil edge length in metres
 ---@return table index
 function M.New(cellSize)
@@ -91,20 +98,30 @@ function M.New(cellSize)
         return true
     end
 
-    ---Candidate ids whose stored position is within `radius` metres of
-    ---(x, y), exact-distance filtered. Each id appears at most once.
+    ---Candidate ids near (x, y). Cell lookup uses `radius + halo` so a stale
+    ---stored position near a cell/radius boundary can never discard an entry
+    ---that already moved inside: the halo makes the result a conservative
+    ---superset. Callers MUST still run their authoritative checks (live
+    ---distance included) on every candidate. Pass halo 0/nil for stable
+    ---entries (ride pickups) to keep the query exact.
+    ---Each id appears at most once.
     ---@param x number
     ---@param y number
     ---@param radius number metres
+    ---@param halo number|nil extra metres for movement between refreshes
     ---@return table ids array
-    function index:Query(x, y, radius)
+    function index:Query(x, y, radius, halo)
         local found = {}
         if type(x) ~= 'number' or type(y) ~= 'number' or type(radius) ~= 'number' or radius < 0 then
             return found
         end
 
-        local minCx, maxCx = math.floor((x - radius) / cellSize), math.floor((x + radius) / cellSize)
-        local minCy, maxCy = math.floor((y - radius) / cellSize), math.floor((y + radius) / cellSize)
+        halo = tonumber(halo) or 0
+        if halo < 0 then halo = 0 end
+        local effective = radius + halo
+
+        local minCx, maxCx = math.floor((x - effective) / cellSize), math.floor((x + effective) / cellSize)
+        local minCy, maxCy = math.floor((y - effective) / cellSize), math.floor((y + effective) / cellSize)
 
         for cx = minCx, maxCx do
             for cy = minCy, maxCy do
@@ -114,7 +131,7 @@ function M.New(cellSize)
                         local pos = self.positions[id]
                         if pos then
                             local dx, dy = pos.x - x, pos.y - y
-                            if dx * dx + dy * dy <= radius * radius then
+                            if dx * dx + dy * dy <= effective * effective then
                                 found[#found + 1] = id
                             end
                         end

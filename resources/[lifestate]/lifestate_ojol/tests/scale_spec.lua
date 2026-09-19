@@ -265,6 +265,38 @@ h.test('sweep offers the nearby driver and not the distant one', function()
     h.eq(matching.DriverOffers['d-near']['r-sweep'], true, 'offer recorded')
 end)
 
+h.test('stale index outside radius still resolves via the live check', function()
+    resetAll()
+    -- Indexed at 2050 m (outside tier 1), live ped already at 1950 m
+    -- (inside). No refresh/reinsert runs between the move and the search:
+    -- the halo must keep the driver a candidate and isEligible decides.
+    addDriver('d-stale', 2050, 0)
+    setPos('d-stale', 1950, 0)
+    local ride = makeRide('r-stale', 0, 0)
+    matching.StartSearch(ride)
+    h.eq(offeredTo('d-stale'), true, 'stale-boundary driver evaluated and offered')
+end)
+
+h.test('stale cell mismatch still resolves via the live check', function()
+    resetAll()
+    -- Stored in cell (1,0) outside the exact circle, live in cell (0,0)
+    -- inside it. Grid approximation must not change the outcome.
+    addDriver('d-cell', 2100, 400)
+    setPos('d-cell', 1900, 300)
+    local ride = makeRide('r-cell', 0, 0)
+    matching.StartSearch(ride)
+    h.eq(offeredTo('d-cell'), true, 'cross-cell stale driver evaluated and offered')
+end)
+
+h.test('genuinely distant driver still excluded with halo', function()
+    resetAll()
+    addDriver('d-far2', 5050, 0)
+    setPos('d-far2', 5000, 0)
+    local ride = makeRide('r-far2', 0, 0)
+    matching.StartSearch(ride)
+    h.eq(offeredTo('d-far2'), false, 'distant driver never offered')
+end)
+
 h.test('exact tier radius still enforced, expansion respected', function()
     resetAll()
     addDriver('d-mid', 2500, 0)

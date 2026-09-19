@@ -325,6 +325,8 @@ local function refreshOffersForDriver(citizenid)
 
     M.Diag.refreshQueries = M.Diag.refreshQueries + 1
 
+    -- Ride pickups are stable, so this query stays exact (no halo); the
+    -- driver's own position here is live, not indexed.
     local rideIds = M.RideGrid:Query(coords.x, coords.y, maxRadius())
     for i = 1, #rideIds do
         local ride = rides.GetRide and rides.GetRide(rideIds[i]) or nil

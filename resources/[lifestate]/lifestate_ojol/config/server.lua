@@ -23,6 +23,7 @@ return {
     -- Scalability hardening (1000-player design). Matching-only indexes;
     -- gameplay values (tiers, timing) are untouched.
     spatialCellSizeMeters = 2000, -- grid cell edge; justified in server/spatial.lua
+    spatialQueryHaloMeters = 250, -- driver candidate halo; covers max movement between refreshes, live check decides
     driverPositionRefreshMs = 2000, -- online-driver index refresh; server ped reads only, no traffic
     performanceDebug = false, -- aggregate matchmaking counters in the server log
     performanceDebugIntervalMs = 45000, -- report cadence while performanceDebug is on

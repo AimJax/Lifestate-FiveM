@@ -449,14 +449,17 @@ function M.IndexDriver(citizenid)
     M.DriverGrid:Insert(citizenid, coords.x, coords.y)
 end
 
----Online driver candidates near a map point. Exact-distance pre-filtered by
----stored index positions; callers re-validate with live coordinates.
+---Online driver candidates near a map point. The query carries a safety halo
+---so a driver who moved inside the radius since their last index refresh is
+---still evaluated: matching.isEligible re-checks the LIVE coordinates, which
+---alone decide. Stable ride-pickup queries stay exact (see matching.lua).
 ---@param point table|vector3
 ---@param radius number metres
 ---@return table citizenids array, deduplicated
 function M.GetDriversNear(point, radius)
     if not point then return {} end
-    return M.DriverGrid:Query(point.x, point.y, radius)
+    local halo = tonumber(serverConfig.spatialQueryHaloMeters) or spatial.DefaultHaloMeters
+    return M.DriverGrid:Query(point.x, point.y, radius, halo)
 end
 
 ---Bounded low-frequency position refresh for ONLINE drivers only.
