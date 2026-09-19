@@ -29,7 +29,12 @@ offered, and `blacklist`/`whitelist` can narrow the list.
 
 ## Provider contract
 
-A job registers itself once — that is the whole integration:
+A job registers itself once — that is the whole integration. Because this call
+crosses a resource boundary, the definition is **serializable metadata only**:
+Lua closures do not survive the boundary as callable functions — CfxLua encodes them
+as `funcref`s (msgpack EXT, see `citizen/scripting/lua/scheduler.lua`), which is how
+a live server rejected Ojol with `give_not_function`. A provider therefore names its
+own server exports instead of sending functions:
 
 ```lua
 exports.lifestate_jobs:RegisterProvider({
@@ -40,26 +45,47 @@ exports.lifestate_jobs:RegisterProvider({
     -- No `resource` field: ownership is resolved by lifestate_jobs from the
     -- invoking resource (see below), so it cannot be declared - or claimed.
 
-    grades = { { level = 0, label = 'Driver' } },   -- optional, or a function
-    give   = function(target, options) ... end,     -- optional
-    remove = function(target, options) ... end,     -- optional
-    inspect = function(target) ... end,             -- optional
+    grades = { { level = 0, label = 'Driver' } },   -- optional data, never a function
+
+    operations = {               -- export names ON THIS resource
+        give = 'adminRegisterDriver',
+        remove = 'adminRemoveDriver',
+        inspect = 'getDriverAdminState',
+    },
 
     actions = {                  -- optional provider-specific authority actions
-        { id = 'setCeo', label = 'Set CEO', confirm = true,
-          handler = function(target, options, ctx) ... end },
+        { id = 'setCeo', label = 'Set CEO', confirm = true, export = 'assignCEO' },
     },
 })
 ```
 
+Those exports are called as:
+
+| Call | Invocation |
+| --- | --- |
+| Give / Remove | `exports[owner][name](target, options, ctx)` -> `success, outcome, detail?` |
+| Inspect | `exports[owner][name](target)` -> state table |
+| Action | `exports[owner][action.export](target, options, ctx)` -> `success, outcome, detail?` |
+
+`target` is always the server-resolved `JobProviderTarget` (`source`, `citizenid`,
+`name`, framework job context) — never client input. Everything is guarded: a
+resource that is not `started` is `provider_unavailable` (and the registry drops it
+on the stop event anyway), and a missing export, a throwing export or a non-boolean
+result is `provider_error`, logged once and isolated to that request.
+
 Rules the registry enforces (see `server/registry.lua`):
 
 - a malformed definition is **rejected with a reason**, never registered;
+- **two explicit modes**, and the mode is never guessed: a definition arriving
+  through `RegisterProvider` is `external` (export names, no closures — a closure is
+  refused with `external_handler_not_serializable`), while the in-resource Qbox
+  adapter registers as `internal` (local functions, no export names);
 - re-registering the same id from the same resource is an idempotent update, so a
   resource restart cannot duplicate a provider;
 - a provider id can only be replaced by its owning resource (no hijacking);
-- a provider needs at least one of `give`/`remove`, and one action's `handler`
-  never leaves the server.
+- a provider needs at least one of `give`/`remove`;
+- job-specific wording travels as data in `messages` (`outcome -> sentence`), so a
+  refusal can be readable without returning a closure.
 
 ## Ownership and lifecycle
 
@@ -85,14 +111,16 @@ is gone. Stopping `lifestate_ojol` therefore removes the Ojol provider immediate
 stopping `qbx_core` removes the framework-job providers, which the adapter
 repopulates on its next start or sync.
 
-A handler returns `success, outcome, detail?`:
+A mutation returns `success, outcome, detail?` (an external one through its export,
+an internal one as a local function):
 
 - `outcome` is a machine string (`registered`, `reactivated`, `removed`,
   `already_registered`, `not_registered`, `unchanged`, ...). The service turns
   the known ones into readable messages and treats `already_registered`,
   `not_registered` and `unchanged` as **successful no-ops** — a duplicate Give or
   a Remove of something absent is not an error.
-- `detail.message` overrides the wording (used for job-specific refusals).
+- Wording is resolved in this order: `detail.message` returned for this call, then
+  the provider's `messages[outcome]` metadata, then the service's generic sentence.
 
 ## Service and authorization
 
@@ -104,8 +132,9 @@ every entry point it:
    via `qbx_core:IsOptin` when `config.requireOptin`),
 2. resolves the client-supplied server id into a real player (`JobProviderTarget`
    with `source`, `citizenid`, `name` and the framework job context),
-3. dispatches to the registered provider inside `pcall`, so one broken provider
-   cannot break the menu, another provider or the request,
+3. dispatches to the registered provider through `server/dispatch.lua` (local call
+   for internal providers, `exports[owner][name]` for external ones) inside `pcall`,
+   so one broken provider cannot break the menu, another provider or the request,
 4. audits the outcome (`[lifestate_jobs] audit: ...`) — including every refusal.
 
 `source` is always the real connection, never a client-supplied citizenid. The
@@ -125,14 +154,20 @@ recorded under [`patches/qbx_adminmenu/`](../../../../patches/qbx_adminmenu/READ
 (see `.freebuff/luacheck/run_specs.mjs`, or any harness that can execute
 `tests/run.lua`):
 
-- `registry_spec.lua` — definition validation, explicit ownership, ordering, grades,
-  owner-only unregistration and `UnregisterByResource` (including cache invalidation);
+- `registry_spec.lua` — the internal/external schema, definition validation,
+  explicit ownership, ordering, grades, owner-only unregistration and
+  `UnregisterByResource` (including cache invalidation);
 - `service_spec.lua` — authorization, target resolution, Give/Remove, provider
   isolation, the generated catalog, View Player Jobs and advanced actions;
 - `provider_ownership_spec.lua` — the export boundary: impersonation attempts,
-  forged overwrite attempts, owner-only unregister, and resource-stop cleanup;
+  forged overwrite attempts, the forced external mode, owner-only unregister, and
+  resource-stop cleanup;
 - `frameworkjobs_spec.lua` — discovery/sync, live grade reads, the qbx_core
-  stop/restart lifecycle, and the Qbox `SetJob` / `RemovePlayerFromJob` write paths.
+  stop/restart lifecycle, and the Qbox `SetJob` / `RemovePlayerFromJob` write paths;
+- `external_dispatch_spec.lua` — a provider in ANOTHER resource being called
+  through its named exports: give/remove/inspect/action, the resolved target and
+  options it receives, and every failure mode (stopped resource, missing export,
+  throwing export, non-boolean result) staying isolated.
 
 Ojol's side of the contract (provider registration, Give/Remove/CEO semantics,
 live phone-app refresh) is proven in

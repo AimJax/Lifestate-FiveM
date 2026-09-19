@@ -33,17 +33,40 @@ local function notify(src, message, notifyType)
     exports.qbx_core:Notify(src, message, notifyType)
 end
 
+---These exports are called two ways, and both must keep working:
+---  * server-side code / commands:  (citizenid, reason)
+---  * the generic admin menu:       (target, options)  -- the resolved JobProviderTarget
+---@param target JobProviderTarget|string
+---@return string? citizenid
+local function citizenidOf(target)
+    if type(target) == 'table' then return target.citizenid end
+    if type(target) == 'string' and target ~= '' then return target end
+
+    return nil
+end
+
+---Human-readable audit label for whatever the caller passed as the second argument.
+---@param reason any
+---@return string
+local function reasonLabel(reason)
+    if type(reason) == 'string' then return reason end
+    if type(reason) == 'table' and type(reason.reason) == 'string' then return reason.reason end
+
+    return 'admin menu'
+end
+
 ---Admin registration: the existing server-authoritative registration path.
----@param citizenid string
----@param reason string
+---@param target JobProviderTarget|string resolved target, or a raw citizenid
+---@param reason string|table? ignored for logic; used in the audit line
 ---@return boolean success, string? outcomeOrReason 'registered' | 'reactivated'
-function M.RegisterDriver(citizenid, reason)
-    if type(citizenid) ~= 'string' or citizenid == '' then return false, 'invalid_target' end
+function M.RegisterDriver(target, reason)
+    local citizenid = citizenidOf(target)
+    if not citizenid then return false, 'invalid_target' end
 
     local ok, outcome = drivers.RegisterDriver(citizenid, 'admin')
     if not ok then return false, outcome end
 
-    print(('[ojol] admin registration: %s (%s, reason: %s)'):format(citizenid, outcome, tostring(reason)))
+    print(('[ojol] admin registration: %s (%s, reason: %s)'):format(citizenid, outcome, reasonLabel(reason)))
 
     local src = drivers.SourceByCitizenid[citizenid]
     if src then
@@ -64,16 +87,17 @@ end
 ---driverFired chain revokes authorization, the work bike, pending offers/rides and
 ---the Driver app. An active CEO is refused here on purpose: the single-CEO
 ---invariant is owned by drivers.FireDriver, so the CEO has to be reassigned first.
----@param citizenid string
----@param reason string
+---@param target JobProviderTarget|string resolved target, or a raw citizenid
+---@param reason string|table? ignored for logic; used in the audit line
 ---@return boolean success, string? outcomeOrReason
-function M.RemoveDriver(citizenid, reason)
-    if type(citizenid) ~= 'string' or citizenid == '' then return false, 'invalid_target' end
+function M.RemoveDriver(target, reason)
+    local citizenid = citizenidOf(target)
+    if not citizenid then return false, 'invalid_target' end
 
     local ok, outcome = drivers.FireDriver(citizenid)
     if not ok then return false, outcome end
 
-    print(('[ojol] admin removal: %s (reason: %s)'):format(citizenid, tostring(reason)))
+    print(('[ojol] admin removal: %s (reason: %s)'):format(citizenid, reasonLabel(reason)))
 
     local src = drivers.SourceByCitizenid[citizenid]
     if src then
@@ -89,10 +113,11 @@ end
 
 ---Admin state snapshot (View Player Jobs). Read-only and generic in shape:
 ---standard flags plus provider-specific details the menu renders as-is.
----@param citizenid string
+---@param target JobProviderTarget|string resolved target, or a raw citizenid
 ---@return table state
-function M.GetState(citizenid)
-    if type(citizenid) ~= 'string' or citizenid == '' then return { registered = false } end
+function M.GetState(target)
+    local citizenid = citizenidOf(target)
+    if not citizenid then return { registered = false } end
 
     local driver = drivers.GetOjolDriver(citizenid)
     local snapshot = drivers.GetDriverStateSnapshot(citizenid)
@@ -132,14 +157,17 @@ end
 ---Assign CEO to a citizenid. Admin-controlled, never callable by a CEO.
 ---Creates the record if missing and reactivates it if the driver was previously
 ---fired; history is preserved either way.
----@param citizenid string
----@param reason string
----@return boolean success, string? error
-function M.AssignCEO(citizenid, reason)
+---@param target JobProviderTarget|string resolved target, or a raw citizenid
+---@param reason string|table? ignored for logic; used in the audit line
+---@return boolean success, string? outcomeOrReason 'ceo_assigned'
+function M.AssignCEO(target, reason)
+    local citizenid = citizenidOf(target)
+    if not citizenid then return false, 'invalid_target' end
+
     local ok, err = drivers.AssignCEO(citizenid, 'admin')
     if not ok then return false, err end
 
-    print(('[ojol] CEO assigned to %s (reason: %s)'):format(citizenid, tostring(reason)))
+    print(('[ojol] CEO assigned to %s (reason: %s)'):format(citizenid, reasonLabel(reason)))
 
     local src = drivers.SourceByCitizenid[citizenid]
     if src then
@@ -148,7 +176,10 @@ function M.AssignCEO(citizenid, reason)
             drivers.GetDriverStateSnapshot(citizenid))
     end
 
-    return true
+    -- Outcome name matches the generic admin vocabulary (see lifestate_jobs
+    -- server/service.lua), so the menu can say who now runs the organisation
+    -- without any Ojol-specific wording on the menu side.
+    return true, 'ceo_assigned'
 end
 
 return M

@@ -74,12 +74,18 @@ CreateThread = function(fn) host.threads[#host.threads + 1] = fn end
 
 local realPrint = print
 
+-- Capture module logs by their leading prefix only, so a failing assertion that
+-- quotes a log line is still printed by the harness instead of being swallowed.
+local function isModuleLog(line)
+    return line:sub(1, 16) == '[lifestate_jobs]'
+end
+
 print = function(...)
     local parts = {}
     for i = 1, select('#', ...) do parts[i] = tostring(select(i, ...)) end
 
     local line = table.concat(parts, ' ')
-    if line:find('[lifestate_jobs]', 1, true) then
+    if isModuleLog(line) then
         host.printed[#host.printed + 1] = line
         return
     end

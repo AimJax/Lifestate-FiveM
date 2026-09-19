@@ -9,7 +9,11 @@
 --   exports.lifestate_jobs:RegisterProvider(definition)  -- owner = the caller
 --   exports.lifestate_jobs:UnregisterProvider(id)        -- only the owner may
 --
--- Providers do NOT need to declare `resource = GetCurrentResourceName()` anymore.
+-- Providers do NOT need to declare `resource = GetCurrentResourceName()` anymore,
+-- and they must NOT send Lua functions: an external definition carries export NAMES
+-- (`operations.give = 'myExport'`), because a closure is encoded as a `funcref`
+-- when it crosses the real resource boundary instead of arriving as a function.
+-- See server/registry.lua for the external schema.
 --
 -- The same module wires lifecycle cleanup: when a resource stops, every provider
 -- it owned is dropped from the registry immediately, so the menu can never hold a
@@ -41,7 +45,11 @@ function M.Register(definition)
         return false, 'unknown_owner'
     end
 
-    local ok, outcome = registry.Register(definition, owner)
+    -- Anything arriving through this export came from ANOTHER resource, so it is
+    -- registered as an external provider and must carry serializable metadata only
+    -- (export names, no closures). The mode is forced here, never taken from the
+    -- definition: a caller cannot talk its way into the internal mode.
+    local ok, outcome = registry.Register(definition, owner, registry.MODE_EXTERNAL)
 
     if ok then
         print(('[lifestate_jobs] provider %s %s (%s, owner %s)'):format(

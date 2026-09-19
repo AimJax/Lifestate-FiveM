@@ -37,14 +37,21 @@ local qbx = {
 exports = { qbx_core = h.exportsProxy(qbx) }
 
 -- Keep the specs readable: module logs are captured, everything else still prints.
+-- The capture matches the prefix at the START of the line only: filtering on
+-- "contains" would also swallow a failing assertion whose message quotes the log,
+-- hiding the failure from the suite output entirely.
 local realPrint = print
+
+local function isModuleLog(line)
+    return line:sub(1, 16) == '[lifestate_jobs]'
+end
 
 print = function(...)
     local parts = {}
     for i = 1, select('#', ...) do parts[i] = tostring(select(i, ...)) end
 
     local line = table.concat(parts, ' ')
-    if line:find('[lifestate_jobs]', 1, true) then
+    if isModuleLog(line) then
         host.printed[#host.printed + 1] = line
         return
     end
@@ -70,12 +77,15 @@ h.reload('server.registry', 'server.service')
 local realRegistry = require 'server.registry'
 local service = require 'server.service'
 
--- Ownership is an explicit argument to the registry (resolved from
--- GetInvokingResource() at the export boundary, which server/providerapi.lua owns
--- and tests/provider_ownership_spec.lua proves). Every provider in this spec belongs
--- to the same stub resource, so the owner is supplied once here instead of at each
--- call site; the registry itself is the real module.
+-- Ownership AND mode are explicit arguments to the registry (ownership is
+-- resolved from GetInvokingResource() at the export boundary, which
+-- server/providerapi.lua owns and tests/provider_ownership_spec.lua proves). Every
+-- provider in this spec is an in-resource one with local handlers, so owner and mode
+-- are supplied once here instead of at every call site; the registry itself is the
+-- real module. External (cross-resource, metadata-only) providers are covered by
+-- tests/provider_ownership_spec.lua and the Ojol provider spec.
 local OWNER = 'lifestate_ojol'
+local MODE = realRegistry.MODE_INTERNAL
 
 local registry = {
     Reset = realRegistry.Reset,
@@ -84,7 +94,7 @@ local registry = {
     Count = realRegistry.Count,
     ByType = realRegistry.ByType,
     ResolveGrades = realRegistry.ResolveGrades,
-    Register = function(def, owner) return realRegistry.Register(def, owner or OWNER) end,
+    Register = function(def, owner) return realRegistry.Register(def, owner or OWNER, MODE) end,
     Unregister = function(id, owner) return realRegistry.Unregister(id, owner or OWNER) end,
 }
 
@@ -300,7 +310,8 @@ h.test('a failing provider is isolated and other providers keep working', functi
     h.eq(failed.ok, false, 'failed')
     h.eq(failed.outcome, 'provider_error', 'outcome')
     h.eq(failed.message, 'The job provider failed to complete the request.', 'generic message')
-    h.contains(host.printed[#host.printed - 1], 'provider error', 'the failure is logged')
+    h.contains(host.printed[#host.printed - 1], 'provider broken', 'the failing provider is named in the log')
+    h.contains(host.printed[#host.printed - 1], 'give failed', 'the operation that failed is named')
     h.contains(host.printed[#host.printed - 1], 'provider exploded', 'with the provider error')
 
     local healthy = service.Mutate(ADMIN, { action = 'give', jobId = 'healthy', target = TARGET })

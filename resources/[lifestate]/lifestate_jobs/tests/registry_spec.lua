@@ -5,6 +5,14 @@
 -- rejected with a reason, re-registration by the SAME owner is idempotent, and
 -- ownership is an explicit argument - never a definition field, and never
 -- something a second resource can take over.
+--
+-- Two explicit MODES are covered here:
+--
+--   * internal - local handlers (the Qbox adapter's shape),
+--   * external - serializable export names (the Ojol shape), where a Lua closure
+--     crossing the resource boundary must be rejected by name instead of failing
+--     mysteriously at call time (that is exactly how a live server rejected Ojol
+--     with `give_not_function`).
 
 local h = require 'tests.harness'
 
@@ -15,9 +23,12 @@ local OWNER = 'lifestate_ojol'
 
 local registry = require 'server.registry'
 
----Build a provider definition. A `false` override CLEARS the key: `pairs()` never
----yields nil values, so `id = nil` would silently keep the default and the
----missing-field cases below would test nothing.
+local INTERNAL = registry.MODE_INTERNAL
+local EXTERNAL = registry.MODE_EXTERNAL
+
+---Build an INTERNAL provider definition (local handlers). A `false` override
+---CLEARS the key: `pairs()` never yields nil values, so `id = nil` would silently
+---keep the default and the missing-field cases below would test nothing.
 ---A `resource` field is present and WRONG by default on purpose: the registry must
 ---ignore it.
 ---@param overrides table?
@@ -39,7 +50,32 @@ local function provider(overrides)
     return def
 end
 
-h.test('a malformed provider is rejected with a reason and is not registered', function()
+---Build an EXTERNAL provider definition: export names only, no closures.
+---@param overrides table?
+local function externalProvider(overrides)
+    local def = {
+        id = 'ojol',
+        label = 'Ojol',
+        type = 'profession',
+        resource = 'lifestate_ojol',
+        operations = {
+            give = 'adminRegisterDriver',
+            remove = 'adminRemoveDriver',
+            inspect = 'getDriverAdminState',
+        },
+        actions = {
+            { id = 'setCeo', label = 'Set Ojol CEO', export = 'assignCEO', confirm = true },
+        },
+    }
+
+    for key, value in pairs(overrides or {}) do
+        def[key] = value ~= false and value or nil
+    end
+
+    return def
+end
+
+h.test('an internal provider needs local handler functions', function()
     registry.Reset()
 
     local cases = {
@@ -57,10 +93,12 @@ h.test('a malformed provider is rejected with a reason and is not registered', f
         { def = provider({ give = false, remove = false }), reason = 'no_mutation_handler' },
         { def = provider({ actions = { { id = 'x' } } }), reason = 'invalid_action_1' },
         { def = provider({ actions = { { id = 'x', label = 'X', handler = 'no' } } }), reason = 'invalid_action_1' },
+        -- Internal providers are called directly, so export names make no sense here.
+        { def = provider({ operations = { give = 'someExport' } }), reason = 'operations_not_supported_internal' },
     }
 
     for i = 1, #cases do
-        local ok, reason = registry.Register(cases[i].def, OWNER)
+        local ok, reason = registry.Register(cases[i].def, OWNER, INTERNAL)
         h.eq(ok, false, ('case %d rejected'):format(i))
         h.eq(reason, cases[i].reason, ('case %d reason'):format(i))
     end
@@ -68,23 +106,89 @@ h.test('a malformed provider is rejected with a reason and is not registered', f
     h.eq(registry.Count(), 0, 'nothing registered')
 end)
 
-h.test('a registration without an owner is refused', function()
+h.test('an external provider must carry export names, never closures', function()
     registry.Reset()
 
-    h.eq(select(2, registry.Register(provider(), nil)), 'owner_required', 'nil owner')
-    h.eq(select(2, registry.Register(provider(), '')), 'owner_required', 'empty owner')
+    -- The live failure this pass exists for: a closure cannot survive the resource
+    -- boundary, so the definition is refused with a name instead of registering and
+    -- then blowing up as `give_not_function` at call time.
+    local cases = {
+        { def = externalProvider({ give = function() end }), reason = 'external_handler_not_serializable' },
+        { def = externalProvider({ remove = function() end }), reason = 'external_handler_not_serializable' },
+        { def = externalProvider({ inspect = function() end }), reason = 'external_handler_not_serializable' },
+        { def = externalProvider({ operations = 'adminRegisterDriver' }), reason = 'operations_not_table' },
+        { def = externalProvider({ operations = { give = function() end, remove = 'x' } }),
+            reason = 'operations_give_not_export_name' },
+        { def = externalProvider({ operations = { give = '', remove = 'x' } }),
+            reason = 'operations_give_not_export_name' },
+        { def = externalProvider({ operations = { remove = 12 } }), reason = 'operations_remove_not_export_name' },
+        { def = externalProvider({ operations = { inspect = {} } }), reason = 'operations_inspect_not_export_name' },
+        { def = externalProvider({ operations = false }), reason = 'no_mutation_handler' },
+        { def = externalProvider({ operations = { remove = 'adminRemoveDriver' } }), reason = 'registered' },
+        { def = externalProvider({ actions = { { id = 'setCeo', label = 'Set Ojol CEO', handler = function() end } } }),
+            reason = 'external_action_handler_not_serializable' },
+        { def = externalProvider({ actions = { { id = 'setCeo', label = 'Set CEO' } } }), reason = 'invalid_action_1' },
+        { def = externalProvider({ messages = { cannot_fire_ceo = function() end } }), reason = 'messages_not_serializable' },
+        { def = externalProvider({ messages = 'nope' }), reason = 'messages_not_table' },
+    }
+
+    for i = 1, #cases do
+        local ok, reason = registry.Register(cases[i].def, OWNER, EXTERNAL)
+
+        if cases[i].reason == 'registered' then
+            h.eq(ok, true, ('case %d accepted'):format(i))
+        else
+            h.eq(ok, false, ('case %d rejected'):format(i))
+            h.eq(reason, cases[i].reason, ('case %d reason'):format(i))
+        end
+    end
+
+    h.eq(registry.Count(), 1, 'only the inspect-only provider was accepted')
+end)
+
+h.test('the stored definition is unambiguous about its mode', function()
+    registry.Reset()
+
+    registry.Register(provider(), OWNER, INTERNAL)
+    registry.Register(externalProvider({ id = 'external' }), OWNER, EXTERNAL)
+
+    local internal = registry.Get('ojol')
+    h.eq(internal.mode, INTERNAL, 'internal mode recorded')
+    h.eq(type(internal.give), 'function', 'internal keeps its local handler')
+    h.eq(internal.operations, nil, 'internal carries no export names')
+    h.eq(internal.resource, OWNER, 'owner recorded even though the definition claimed one')
+
+    local external = registry.Get('external')
+    h.eq(external.mode, EXTERNAL, 'external mode recorded')
+    h.eq(external.give, nil, 'external carries no handler')
+    h.eq(external.operations.give, 'adminRegisterDriver', 'external keeps the export name')
+    h.eq(registry.OperationExport(external, 'remove'), 'adminRemoveDriver', 'resolved per operation')
+    h.eq(registry.OperationExport(external, 'give'), 'adminRegisterDriver', 'resolved per operation')
+    h.eq(registry.OperationExport(external, 'inspect'), 'getDriverAdminState', 'resolved per operation')
+
+    -- An internal provider's exports resolve to nothing, and vice versa.
+    h.eq(registry.OperationExport(internal, 'give'), nil, 'internal has no export to dispatch to')
+end)
+
+h.test('a registration without an owner or with an unknown mode is refused', function()
+    registry.Reset()
+
+    h.eq(select(2, registry.Register(provider(), nil, INTERNAL)), 'owner_required', 'nil owner')
+    h.eq(select(2, registry.Register(provider(), '', INTERNAL)), 'owner_required', 'empty owner')
+    h.eq(select(2, registry.Register(provider(), OWNER, nil)), 'invalid_mode', 'no mode')
+    h.eq(select(2, registry.Register(provider(), OWNER, 'guessed')), 'invalid_mode', 'unknown mode')
     h.eq(registry.Count(), 0, 'nothing registered')
 end)
 
 h.test('a valid provider registers once and re-registration is an idempotent update', function()
     registry.Reset()
 
-    local ok, outcome = registry.Register(provider(), OWNER)
+    local ok, outcome = registry.Register(provider(), OWNER, INTERNAL)
     h.eq(ok, true, 'registered')
     h.eq(outcome, 'registered', 'outcome')
     h.eq(registry.Count(), 1, 'count')
 
-    local updated = select(2, registry.Register(provider({ label = 'Ojol Driver' }), OWNER))
+    local updated = select(2, registry.Register(provider({ label = 'Ojol Driver' }), OWNER, INTERNAL))
     h.eq(updated, 'updated', 'second registration is an update')
     h.eq(registry.Count(), 1, 'still one provider')
     h.eq(registry.Get('ojol').label, 'Ojol Driver', 'definition replaced')
@@ -94,42 +198,48 @@ h.test('ownership comes from the caller, never from the definition', function()
     registry.Reset()
 
     -- The definition lies; the owner argument wins.
-    registry.Register(provider({ resource = 'some_other_resource' }), OWNER)
+    registry.Register(provider({ resource = 'some_other_resource' }), OWNER, INTERNAL)
     h.eq(registry.Get('ojol').resource, OWNER, 'definition field ignored')
 
     -- ...and a definition that omits it is equally fine.
-    registry.Register(provider({ id = 'second', resource = false }), 'future_job_resource')
+    registry.Register(provider({ id = 'second', resource = false }), 'future_job_resource', INTERNAL)
     h.eq(registry.Get('second').resource, 'future_job_resource', 'owner recorded')
 end)
 
 h.test('a provider id cannot be taken over by another owner, with or without a lie', function()
     registry.Reset()
-    registry.Register(provider(), OWNER)
+    registry.Register(provider(), OWNER, INTERNAL)
 
-    local ok, reason = registry.Register(provider(), 'some_other_resource')
+    local ok, reason = registry.Register(provider(), 'some_other_resource', INTERNAL)
     h.eq(ok, false, 'rejected')
     h.eq(reason, 'id_conflict', 'reason')
     h.eq(registry.Get('ojol').resource, OWNER, 'owner unchanged')
 
     -- Claiming the existing owner in the definition changes nothing.
-    local lied, liedReason = registry.Register(provider({ resource = OWNER }), 'some_other_resource')
+    local lied, liedReason = registry.Register(provider({ resource = OWNER }), 'some_other_resource', INTERNAL)
     h.eq(lied, false, 'still rejected')
     h.eq(liedReason, 'id_conflict', 'reason')
     h.eq(registry.Get('ojol').resource, OWNER, 'owner unchanged')
 
     -- There is no overwrite path: an options table is not consulted at all.
-    local forged = select(2, registry.Register(provider(), 'some_other_resource', { overwrite = true }))
+    local forged = select(2, registry.Register(provider(), 'some_other_resource', INTERNAL, { overwrite = true }))
     h.eq(forged, 'id_conflict', 'no overwrite argument exists')
     h.eq(registry.Get('ojol').resource, OWNER, 'owner unchanged')
+
+    -- Switching the MODE is not a way around ownership either.
+    local crossed = select(2, registry.Register(externalProvider(), 'some_other_resource', EXTERNAL))
+    h.eq(crossed, 'id_conflict', 'mode does not affect ownership')
+    h.eq(registry.Get('ojol').mode, INTERNAL, 'the stored definition is untouched')
 end)
 
 h.test('the list is ordered by hint then label, and can be filtered by type', function()
     registry.Reset()
 
-    registry.Register(provider({ id = 'zulu', label = 'Zulu', order = 10 }), OWNER)
-    registry.Register(provider({ id = 'alpha', label = 'Alpha', order = 20 }), OWNER)
-    registry.Register(provider({ id = 'bravo', label = 'Bravo', order = 20 }), OWNER)
-    registry.Register(provider({ id = 'qbx:police', label = 'LSPD', type = 'framework_job', order = 200 }), 'qbx_core')
+    registry.Register(provider({ id = 'zulu', label = 'Zulu', order = 10 }), OWNER, INTERNAL)
+    registry.Register(provider({ id = 'alpha', label = 'Alpha', order = 20 }), OWNER, INTERNAL)
+    registry.Register(provider({ id = 'bravo', label = 'Bravo', order = 20 }), OWNER, INTERNAL)
+    registry.Register(provider({ id = 'qbx:police', label = 'LSPD', type = 'framework_job', order = 200 }),
+        'qbx_core', INTERNAL)
 
     local list = registry.List()
     h.eq(#list, 4, 'four providers')
@@ -149,7 +259,7 @@ h.test('grades can be static, lazy or broken, and are normalized and sorted', fu
     registry.Register(provider({
         id = 'static',
         grades = { { level = 2, label = 'Chief' }, { level = 0, label = 'Recruit', payment = 50 } },
-    }), OWNER)
+    }), OWNER, INTERNAL)
 
     local grades = registry.ResolveGrades(registry.Get('static'))
     h.eq(#grades, 2, 'two grades')
@@ -157,24 +267,31 @@ h.test('grades can be static, lazy or broken, and are normalized and sorted', fu
     h.eq(grades[1].payment, 50, 'payment carried over')
     h.eq(grades[2].label, 'Chief', 'label carried over')
 
-    registry.Register(provider({ id = 'lazy', grades = function() return { { level = 1, label = 'Officer' } } end }), OWNER)
+    registry.Register(provider({ id = 'lazy', grades = function() return { { level = 1, label = 'Officer' } } end }),
+        OWNER, INTERNAL)
     h.eq(#(registry.ResolveGrades(registry.Get('lazy'))), 1, 'lazy grades resolved')
 
-    registry.Register(provider({ id = 'broken', grades = function() error('boom') end }), OWNER)
+    registry.Register(provider({ id = 'broken', grades = function() error('boom') end }), OWNER, INTERNAL)
     local broken, reason = registry.ResolveGrades(registry.Get('broken'))
     h.eq(broken, nil, 'broken grades resolve to nil')
     h.eq(reason, 'grades_error', 'reason')
 
-    registry.Register(provider({ id = 'empty', grades = {} }), OWNER)
+    registry.Register(provider({ id = 'empty', grades = {} }), OWNER, INTERNAL)
     h.eq(registry.ResolveGrades(registry.Get('empty')), nil, 'empty grade table is not a grade list')
 
-    registry.Register(provider({ id = 'none' }), OWNER)
+    registry.Register(provider({ id = 'none' }), OWNER, INTERNAL)
     h.eq(registry.ResolveGrades(registry.Get('none')), nil, 'no grades at all')
+
+    -- An external provider may only carry DATA as grades, never a lazy closure that
+    -- would have to run on the other side of the boundary.
+    registry.Register(externalProvider({ id = 'external', grades = { { level = 0, label = 'Rider' } } }),
+        OWNER, EXTERNAL)
+    h.eq(#(registry.ResolveGrades(registry.Get('external'))), 1, 'static external grades resolve')
 end)
 
 h.test('only the owner can unregister a provider', function()
     registry.Reset()
-    registry.Register(provider(), OWNER)
+    registry.Register(provider(), OWNER, INTERNAL)
 
     h.eq(select(2, registry.Unregister('nope', OWNER)), 'not_registered', 'unknown id')
     h.eq(select(2, registry.Unregister(nil, OWNER)), 'invalid_id', 'invalid id')
@@ -186,7 +303,7 @@ h.test('only the owner can unregister a provider', function()
     h.eq(registry.Count(), 0, 'empty')
     h.eq(registry.Get('ojol'), nil, 'gone')
 
-    registry.Register(provider(), OWNER)
+    registry.Register(provider(), OWNER, INTERNAL)
     registry.Reset()
     h.eq(registry.Count(), 0, 'reset clears everything')
 end)
@@ -194,9 +311,9 @@ end)
 h.test('UnregisterByResource removes exactly one owner\'s providers', function()
     registry.Reset()
 
-    registry.Register(provider({ id = 'ojol' }), 'resource_a')
-    registry.Register(provider({ id = 'taxi' }), 'resource_a')
-    registry.Register(provider({ id = 'qbx:police', type = 'framework_job' }), 'qbx_core')
+    registry.Register(provider({ id = 'ojol' }), 'resource_a', INTERNAL)
+    registry.Register(provider({ id = 'taxi' }), 'resource_a', INTERNAL)
+    registry.Register(provider({ id = 'qbx:police', type = 'framework_job' }), 'qbx_core', INTERNAL)
 
     h.eq(registry.UnregisterByResource('resource_b'), 0, 'nothing owned by the other resource')
     h.eq(registry.Count(), 3, 'untouched')
@@ -215,8 +332,8 @@ end)
 h.test('UnregisterByResource invalidates the ordered id cache', function()
     registry.Reset()
 
-    registry.Register(provider({ id = 'zulu', order = 10 }), 'resource_a')
-    registry.Register(provider({ id = 'alpha', order = 20 }), 'resource_b')
+    registry.Register(provider({ id = 'zulu', order = 10 }), 'resource_a', INTERNAL)
+    registry.Register(provider({ id = 'alpha', order = 20 }), 'resource_b', INTERNAL)
 
     -- Populate the cache, then remove a provider behind the cache's back.
     h.eq(#registry.List(), 2, 'cache warm')
@@ -229,7 +346,7 @@ h.test('UnregisterByResource invalidates the ordered id cache', function()
     h.eq(ids[1], 'alpha', 'and would hand it the wrong provider')
 
     -- A later registration must also be ordered correctly against the survivors.
-    registry.Register(provider({ id = 'bravo', order = 15 }), 'resource_b')
+    registry.Register(provider({ id = 'bravo', order = 15 }), 'resource_b', INTERNAL)
     local ordered = registry.List()
     h.eq(ordered[1].id, 'bravo', 're-sorted after the invalidation')
     h.eq(ordered[2].id, 'alpha', 're-sorted after the invalidation')

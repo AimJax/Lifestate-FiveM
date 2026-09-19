@@ -18,6 +18,7 @@ local h = require 'tests.harness'
 
 local host = {
     invoking = nil,      -- what GetInvokingResource() reports
+    resources = {},      -- [name] = 'started' for resources the dispatch path may call
     handlers = {},
     printed = {},
     ace = {},
@@ -43,6 +44,7 @@ end
 
 function GetInvokingResource() return host.invoking end
 function GetCurrentResourceName() return 'lifestate_jobs' end
+function GetResourceState(name) return host.resources[name] or 'missing' end
 function IsPlayerAceAllowed(source, permission) return host.ace[source] and host.ace[source][permission] == true end
 function GetPlayerName(source) return host.names[source] end
 function AddEventHandler(eventName, fn) host.handlers[eventName] = fn end
@@ -57,12 +59,18 @@ exports = { qbx_core = h.exportsProxy(qbx) }
 
 local realPrint = print
 
+-- Capture module logs by their leading prefix only, so a failing assertion that
+-- quotes a log line is still printed by the harness instead of being swallowed.
+local function isModuleLog(line)
+    return line:sub(1, 16) == '[lifestate_jobs]'
+end
+
 print = function(...)
     local parts = {}
     for i = 1, select('#', ...) do parts[i] = tostring(select(i, ...)) end
 
     local line = table.concat(parts, ' ')
-    if line:find('[lifestate_jobs]', 1, true) then
+    if isModuleLog(line) then
         host.printed[#host.printed + 1] = line
         return
     end
@@ -92,15 +100,24 @@ local function asResource(name)
     host.invoking = name
 end
 
+---An EXTERNAL provider definition, i.e. exactly what a real resource sends through
+---the export boundary: export NAMES, never closures (a closure is encoded as a
+---`funcref` on the other side, which is how a live server rejected Ojol with
+---`give_not_function`).
 ---@param overrides table?
 local function definition(overrides)
     local def = {
         id = 'ojol',
         label = 'Ojol',
         type = 'profession',
-        give = function() return true, 'registered' end,
-        remove = function() return true, 'removed' end,
-        inspect = function() return { registered = true } end,
+        operations = {
+            give = 'adminRegisterDriver',
+            remove = 'adminRemoveDriver',
+            inspect = 'getDriverAdminState',
+        },
+        actions = {
+            { id = 'setCeo', label = 'Set Ojol CEO', export = 'assignCEO', confirm = true },
+        },
     }
 
     for key, value in pairs(overrides or {}) do def[key] = value end
@@ -111,6 +128,7 @@ local function reset()
     registry.Reset()
 
     host.invoking = RESOURCE_A
+    host.resources = {}
     host.handlers = {}
     host.printed = {}
     host.ace = { [ADMIN] = { admin = true } }
@@ -129,7 +147,21 @@ h.test('the invoking resource owns the provider it registers', function()
     h.eq(ok, true, 'registered')
     h.eq(outcome, 'registered', 'outcome')
     h.eq(registry.Get('ojol').resource, RESOURCE_A, 'owner is the caller')
+    h.eq(registry.Get('ojol').mode, registry.MODE_EXTERNAL, 'everything through this export is external')
+    h.eq(registry.Get('ojol').give, nil, 'no handler is stored, only the export name')
+    h.eq(registry.Get('ojol').operations.give, 'adminRegisterDriver', 'the export name is kept')
     h.contains(host.printed[#host.printed], RESOURCE_A, 'and is logged')
+end)
+
+h.test('the boundary rejects closures, so a live give_not_function cannot happen', function()
+    reset()
+    asResource(RESOURCE_A)
+
+    local ok, reason = providerapi.Register(definition({ operations = nil, give = function() return true end }))
+
+    h.eq(ok, false, 'refused at registration time')
+    h.eq(reason, 'external_handler_not_serializable', 'named reason, not a mystery at call time')
+    h.eq(registry.Count(), 0, 'nothing registered')
 end)
 
 h.test('a definition cannot claim an owner: the caller wins', function()

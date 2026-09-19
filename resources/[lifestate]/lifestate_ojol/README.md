@@ -298,10 +298,15 @@ CEO rank itself is assigned admin-side via `exports.lifestate_ojol:assignCEO(cit
 These commands stay as the in-world CEO tool. The **admin** path is the generic
 `/admin -> Job Management` section (`lifestate_jobs`), where Ojol is registered as
 an *independent profession*: Give/Remove work regardless of distance, and Give
-reuses exactly the same registration/firing code as above. The provider declares no
-owner of its own: `lifestate_jobs` records the invoking resource as the owner, so
-another resource cannot impersonate Ojol, and the Ojol entry is dropped from the
-registry automatically when this resource stops. Two invariants are
+reuses exactly the same registration/firing code as above
+(`server/jobsprovider.lua` names the exports below rather than sending functions —
+a Lua closure is encoded as a `funcref` when it crosses a resource boundary). The
+provider declares no owner of
+its own: `lifestate_jobs` records the invoking resource as the owner, so another
+resource cannot impersonate Ojol, and the Ojol entry is dropped from the registry
+automatically when this resource stops. Registration is retried only while
+`lifestate_jobs` is not up yet, with a bounded backoff (500 ms -> 5 s); a rejected
+definition is logged once and never retried. Two invariants are
 intentional there — ordinary **Give never assigns CEO** (CEO is a separate,
 confirmed provider action), and **Remove refuses the active CEO** so the admin has
 to reassign the CEO first rather than leaving the organization headless.

@@ -30,6 +30,10 @@ M.TYPE = 'framework_job'
 ---definition field for ownership.
 M.OWNER = 'qbx_core'
 
+---Internal mode: these handlers are local Lua functions in this resource and never
+---cross a resource boundary, which is why they may stay functions.
+M.MODE = 'internal'
+
 local function describeError(err)
     if type(err) == 'table' then return tostring(err.message or err.code or 'unknown error') end
     if err == nil then return 'unknown error' end
@@ -181,7 +185,7 @@ function M.Sync()
 
     for name, job in pairs(jobs) do
         if type(name) == 'string' and type(job) == 'table' and isOffered(name) then
-            local registered, outcome = registry.Register(definition(name, job), M.OWNER)
+            local registered, outcome = registry.Register(definition(name, job), M.OWNER, M.MODE)
 
             if registered then
                 offered[M.PREFIX .. name] = true

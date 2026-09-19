@@ -8,6 +8,7 @@
 -- whole new job type) be added with a single provider registration.
 
 local registry = require 'server.registry'
+local dispatch = require 'server.dispatch'
 local config = require 'config.server'
 
 local M = {}
@@ -49,6 +50,12 @@ local OUTCOMES = {
     unchanged = function(target, job)
         return ('%s already has %s — nothing changed.'):format(target.name, job.label)
     end,
+    -- Rank-authority vocabulary: the generic word for "this player now heads the
+    -- organisation". Providers that hand out such a rank return this outcome (or
+    -- their own wording through `messages`, see server/registry.lua).
+    ceo_assigned = function(target, job)
+        return ('%s is now the %s CEO.'):format(target.name, job.label)
+    end,
 }
 
 ---Failure messages. A provider may still override its own wording by returning
@@ -65,6 +72,7 @@ local FAILURE_MESSAGES = {
     unsupported_action = 'This job provider does not support that action.',
     provider_error = 'The job provider failed to complete the request.',
     database_error = 'The job backend could not save the change.',
+    provider_unavailable = 'That job service is not running right now. Try again once it is back.',
 }
 
 ---@param reason string
@@ -142,32 +150,10 @@ local function clientTarget(target)
     }
 end
 
----Run a provider handler in isolation: a broken provider must never break the
----admin menu, another provider or the request path.
----@param fn function
----@param target JobProviderTarget
----@param options table
----@param ctx table
----@return table result { ok, outcome, detail }
-local function invoke(fn, target, options, ctx)
-    local called, succeeded, outcome, detail = pcall(fn, target, options, ctx)
-
-    if not called then
-        print(('[lifestate_jobs] provider error: %s'):format(tostring(succeeded)))
-        return { ok = false, outcome = 'provider_error' }
-    end
-
-    if type(succeeded) ~= 'boolean' then
-        print(('[lifestate_jobs] provider returned no result: %s'):format(tostring(succeeded)))
-        return { ok = false, outcome = 'provider_error' }
-    end
-
-    return {
-        ok = succeeded,
-        outcome = type(outcome) == 'string' and outcome or (succeeded and 'done' or 'failed'),
-        detail = type(detail) == 'table' and detail or nil,
-    }
-end
+-- Invocation lives in server/dispatch.lua: internal providers are called as local
+-- functions, external ones through their resource's exports with everything
+-- guarded, so a stopped, missing, throwing or malformed provider fails only its
+-- own request.
 ---Everything the admin UI needs to render Give/Remove/Advanced, generated from
 ---the registry. A provider whose metadata fails to resolve still appears (without
 ---grades) instead of removing the whole list.
@@ -253,16 +239,10 @@ function M.Inspect(source, targetArg)
     for _, provider in ipairs(registry.List()) do
         local state, failed
 
-        if provider.inspect then
-            local ok, result = pcall(provider.inspect, target)
-            if ok and type(result) == 'table' then
-                state = result
-            else
-                failed = true
-                if not ok then
-                    print(('[lifestate_jobs] provider %s inspect failed: %s'):format(provider.id, tostring(result)))
-                end
-            end
+        if provider.mode == registry.MODE_EXTERNAL or provider.inspect then
+            local result, errored = dispatch.Inspect(provider, target)
+            if result then state = result end
+            failed = errored == true
         end
 
         providers[#providers + 1] = {
@@ -351,31 +331,18 @@ function M.Mutate(source, payload)
     local outcome
 
     if action == 'give' then
-        if not provider.give then
-            M.Audit(source, target, payload, 'unsupported_action')
-            return M.Failure('unsupported_action')
-        end
-
-        outcome = invoke(provider.give, target, { grade = grade, source = source }, { jobId = provider.id })
+        outcome = dispatch.Mutate(provider, 'give', nil, target,
+            { grade = grade, source = source }, { jobId = provider.id })
     elseif action == 'remove' then
-        if not provider.remove then
-            M.Audit(source, target, payload, 'unsupported_action')
-            return M.Failure('unsupported_action')
-        end
-
-        outcome = invoke(provider.remove, target, { source = source }, { jobId = provider.id })
+        outcome = dispatch.Mutate(provider, 'remove', nil, target,
+            { source = source }, { jobId = provider.id })
     else
-        local handler
-        for i = 1, #provider.actions do
-            if provider.actions[i].id == payload.actionId then handler = provider.actions[i] end
-        end
-
-        if not handler then
+        if not registry.FindAction(provider, payload.actionId) then
             M.Audit(source, target, payload, 'invalid_action')
             return M.Failure('invalid_action')
         end
 
-        outcome = invoke(handler.handler, target, {},
+        outcome = dispatch.Mutate(provider, 'action', payload.actionId, target, {},
             { source = source, jobId = provider.id, actionId = payload.actionId })
     end
 
@@ -384,7 +351,11 @@ function M.Mutate(source, payload)
     local safeNoop = SAFE_NOOP[outcome.outcome] == true
     local succeeded = outcome.ok or safeNoop
 
+    -- Wording order: what the provider said for THIS call, then the provider's own
+    -- metadata for that outcome (external providers cannot return a closure, so
+    -- messages travel as data), then the service's generic vocabulary.
     local detailMessage = outcome.detail and outcome.detail.message
+        or (provider.messages and provider.messages[outcome.outcome])
     local message
 
     if succeeded then
