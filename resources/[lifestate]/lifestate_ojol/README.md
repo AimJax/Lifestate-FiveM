@@ -295,6 +295,14 @@ Live ride state is never written per tick; only creation, acceptance and the ter
 
 CEO rank itself is assigned admin-side via `exports.lifestate_ojol:assignCEO(citizenid, reason)`.
 
+These commands stay as the in-world CEO tool. The **admin** path is the generic
+`/admin -> Job Management` section (`lifestate_jobs`), where Ojol is registered as
+an *independent profession*: Give/Remove work regardless of distance, and Give
+reuses exactly the same registration/firing code as above. Two invariants are
+intentional there — ordinary **Give never assigns CEO** (CEO is a separate,
+confirmed provider action), and **Remove refuses the active CEO** so the admin has
+to reassign the CEO first rather than leaving the organization headless.
+
 ## Fire / rehire semantics
 
 Firing is a **soft deactivation**, never a delete:
@@ -322,6 +330,13 @@ The client-side guard remains for UX only; the server is the authority.
 ```lua
 -- Server: CEO/admin management
 local ok, err = exports.lifestate_ojol:assignCEO(citizenid, reason)
+
+-- Server: the generic admin Job Management API (lifestate_jobs provider).
+-- These are trusted-server-only and never reachable from a client; the ADMIN's
+-- authorization is enforced by lifestate_jobs before it calls them.
+local ok, outcome = exports.lifestate_ojol:adminRegisterDriver(citizenid, reason) -- 'registered' | 'reactivated'
+local ok, outcome = exports.lifestate_ojol:adminRemoveDriver(citizenid, reason)   -- 'removed' | 'cannot_fire_ceo' | ...
+local state = exports.lifestate_ojol:getDriverAdminState(citizenid)
 
 -- Client: waypoint + road-snapped ride endpoints (used by the customer app)
 local locations = exports.lifestate_ojol:GetSnappedRideLocations()

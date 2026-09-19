@@ -10,6 +10,8 @@ local matching = require 'server.matching'
 local payments = require 'server.payments'
 local roadsnap = require 'server.roadsnap'
 local phoneapps = require 'server.phoneapps'
+local adminapi = require 'server.adminapi'
+local jobsprovider = require 'server.jobsprovider'
 
 -- Validation helpers --------------------------------------------------------
 
@@ -640,33 +642,14 @@ lib.addCommand('demoteojol', {
     notify(targetSrc, ('Rank Ojol kamu turun ke %s.'):format(newRank), 'error')
 end)
 
--- Admin-side CEO assignment API (for a future admin command / interface).
--- Not exposed to clients: must be called from another trusted server resource,
--- e.g. exports.lifestate_ojol:assignCEO(citizenid, reason).
-
----Assign CEO to a citizenid. Admin-controlled, never callable by a CEO.
----Creates the record if missing and reactivates it if the driver was previously
----fired; history is preserved either way.
----@param citizenid string
----@param reason string
----@return boolean success, string? error
-local function assignCEO(citizenid, reason)
-    local ok, err = drivers.AssignCEO(citizenid, 'admin')
-    if not ok then return false, err end
-
-    print(('[ojol] CEO assigned to %s (reason: %s)'):format(citizenid, tostring(reason)))
-
-    local src = drivers.SourceByCitizenid[citizenid]
-    if src then
-        notify(src, 'Kamu sekarang CEO Ojol.', 'success')
-        TriggerClientEvent('lifestate_ojol:client:driverStateChanged', src,
-            drivers.GetDriverStateSnapshot(citizenid))
-    end
-
-    return true
-end
-
-exports('assignCEO', assignCEO)
+-- Admin job-management API ----------------------------------------------------
+-- The implementation lives in server/adminapi.lua (trusted server-only, called by
+-- the generic admin Job Management section through lifestate_jobs). Ojol is an
+-- independent profession, so none of these touches the player's Qbox primary job.
+exports('assignCEO', adminapi.AssignCEO)
+exports('adminRegisterDriver', adminapi.RegisterDriver)
+exports('adminRemoveDriver', adminapi.RemoveDriver)
+exports('getDriverAdminState', adminapi.GetState)
 
 -- Lifecycle -----------------------------------------------------------------
 
@@ -698,6 +681,12 @@ AddEventHandler('onServerResourceStart', function(resName)
     if resName ~= GetCurrentResourceName() then return end
     onStartup()
 end)
+
+-- Job management -------------------------------------------------------------
+-- The Ojol provider registers itself with the generic job registry, so the admin
+-- menu (and the registry itself) never needs Ojol-specific code. Ojol stays an
+-- independent profession: registering here does not touch the Qbox primary job.
+jobsprovider.Start()
 
 AddEventHandler('QBCore:Server:PlayerLoaded', function(player)
     -- Warm the citizenid <-> source mapping as soon as characters are usable.

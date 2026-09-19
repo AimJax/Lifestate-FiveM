@@ -1,0 +1,20 @@
+--- a/client/main.lua
++++ b/client/main.lua
+@@ Jobs: the Job Management entry point (the only qbx_adminmenu change).
+@@
+         {label = locale('main_options.label6'), description = locale('main_options.desc6'), icon = 'fas fa-list', args = {'qbx_adminmenu_reports_menu'}},
++        -- Lifestate: generic job/profession management (lifestate_jobs owns the
++        -- menu, the registry and every mutation; this is the only hook).
++        {label = 'Job Management', description = 'Give, remove and inspect player jobs and professions', icon = 'fas fa-briefcase', args = {'qbx_adminmenu_jobs_menu'}}
+     }
+ }, function(_, _, args)
+     if args[1] == 'qbx_adminmenu_players_menu' then
+         GeneratePlayersMenu()
+     elseif args[1] == 'qbx_adminmenu_reports_menu' then
+         GenerateReportMenu()
++    elseif args[1] == 'qbx_adminmenu_jobs_menu' then
++        TriggerServerEvent('lifestate_jobs:server:openMenu')
+     else
+         lib.showMenu(args[1], MenuIndexes[args[1]])
+     end
+ end)

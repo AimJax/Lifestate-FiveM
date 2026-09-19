@@ -19,9 +19,27 @@ function M.contains(haystack, needle, message)
     end
 end
 
+---Assert that a string does NOT contain a fragment.
+function M.absent(haystack, needle, message)
+    if type(haystack) == 'string' and haystack:find(needle, 1, true) then
+        error(('%s: expected %s to not contain %s'):format(message or 'assertion', haystack, needle), 2)
+    end
+end
+
+function M.test(name, fn)
+    local ok, err = pcall(fn)
+    if ok then
+        M.passed = M.passed + 1
+        print(('PASS %s'):format(name))
+    else
+        M.failed = M.failed + 1
+        print(('FAIL %s\n  %s'):format(name, tostring(err)))
+    end
+end
+
 ---Emulate FiveM's `exports` proxy for one resource:
----   exports.res:fn(a)  -> fn(a)   (colon syntax, self stripped)
----   exports.res.fn(a)  -> fn(a)   (dot syntax)
+---   exports.res:fn(a)  -> fn(a)        (colon syntax, self stripped)
+---   exports.res.fn(a)  -> fn(a)        (dot syntax)
 function M.exportsProxy(target)
     local proxy
     proxy = setmetatable({}, {
@@ -45,17 +63,6 @@ function M.reload(...)
     for i = 1, #names do
         package.loaded[names[i]] = nil
         package.preload[names[i]] = nil
-    end
-end
-
-function M.test(name, fn)
-    local ok, err = pcall(fn)
-    if ok then
-        M.passed = M.passed + 1
-        print(('PASS %s'):format(name))
-    else
-        M.failed = M.failed + 1
-        print(('FAIL %s\n  %s'):format(name, tostring(err)))
     end
 end
 

@@ -9,12 +9,14 @@ whole. It is deliberately *not* a mirror of the Qbox server: framework code
 
 | Path | What it is |
 | --- | --- |
-| `resources/[lifestate]/lifestate_ojol` | Ojol player ride system (driver registration, matching, rides, payments, App Store backend, dispatcher NPC, tests) |
+| `resources/[lifestate]/lifestate_ojol` | Ojol player ride system (driver registration, matching, rides, payments, App Store backend, dispatcher NPC, admin job API, tests) |
+| `resources/[lifestate]/lifestate_jobs` | Generic admin Job Management (provider registry, generic service, Qbox primary-job adapter, tests) |
 | `resources/[lifestate]/lifestate_pcx160` | PCX160 bike asset stream for Ojol drivers |
 | `resources/[npwd-apps]/npwd_lifestate_ojol` | NPWD Driver app (external federation app) |
 | `resources/[npwd-apps]/npwd_lifestate_ojol_customer` | NPWD Customer app (external federation app) |
 | `resources/[npwd-apps]/npwd_lifestate_app_store` | NPWD Lifestate App Store (external federation app) |
-| `patches/npwd/` | The only third-party files we modify, with an explanation of each |
+| `patches/npwd/` | The NPWD bundle patch, with an explanation of exactly what changed |
+| `patches/qbx_adminmenu/` | The 5-line admin-menu hook that opens Job Management |
 | `patches/examples/` | Sanitized templates of configuration that lives on the server only |
 
 ## What is deliberately NOT tracked
@@ -34,6 +36,20 @@ repository — rooted at `resources/[lifestate]` — was grafted into this one a
 `resources/[lifestate]` via a subtree-style merge, so the full commit history of
 the old `Lifestate-FiveM` repository is preserved and reachable
 (`git log --follow resources/[lifestate]`).
+
+## Job Management
+
+Admin job/profession management is generic: `/admin` -> **Job Management** ->
+Give / Remove / View Player Jobs / Advanced provider actions. The section, the
+registry and every mutation live in `resources/[lifestate]/lifestate_jobs`; a job
+becomes available to it with a single `RegisterProvider` call, so future jobs
+need no admin-menu change. Ojol registers itself as the first **independent
+profession** (it never touches the player's Qbox primary job), and every Qbox job
+is exposed automatically as a `framework_job` through qbx_core's own API. See
+`resources/[lifestate]/lifestate_jobs/README.md`.
+
+The only third-party edit this needs is the entry point in `qbx_adminmenu`,
+recorded under `patches/qbx_adminmenu/`.
 
 ## The NPWD patch
 
