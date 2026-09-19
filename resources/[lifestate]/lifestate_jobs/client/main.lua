@@ -142,6 +142,7 @@ local function showProviderList(providers, title, onPick, parentId)
     end
 
     showMenu('lifestate_jobs_provider_list', title, options, function(_, _, args)
+        if type(args) ~= 'table' then return end
         onPick(args[1])
     end, onCloseTo(parentId))
 end
@@ -184,6 +185,7 @@ local function showProviderPicker(catalog, title, onPick, parentId)
     end
 
     showMenu('lifestate_jobs_provider_types', title, options, function(_, _, args)
+        if type(args) ~= 'table' then return end
         showProviderList(groups[args[1]], title, onPick, 'lifestate_jobs_provider_types')
     end, onCloseTo(parentId))
 end
@@ -203,6 +205,7 @@ local function showGradePicker(provider, targetId)
 
     showMenu('lifestate_jobs_grade_picker', ('Give %s — player %d'):format(provider.label, targetId), options,
         function(_, _, args)
+            if type(args) ~= 'table' then return end
             mutate({ action = 'give', jobId = provider.id, target = targetId, grade = args[1] })
         end, onCloseTo('lifestate_jobs_menu'))
 end
@@ -290,6 +293,7 @@ showJobsMenu = function()
     end
 
     showMenu('lifestate_jobs_menu', 'Job Management', options, function(_, _, args)
+        if type(args) ~= 'table' then return end
         if args[1] == 'give' then
             startGive()
         elseif args[1] == 'remove' then
@@ -376,6 +380,8 @@ showPlayerJobs = function(targetId)
     showMenu('lifestate_jobs_player_state',
         ('Jobs — %s'):format(target.name or ('player ' .. tostring(targetId))), options,
         function(_, _, args)
+            -- Informational rows carry no args: selecting one is a no-op.
+            if type(args) ~= 'table' then return end
             if args[1] == 'back' then showJobsMenu() end
         end, onCloseTo('lifestate_jobs_menu'))
 end
@@ -413,6 +419,7 @@ startAdvanced = function(catalog)
 
             showMenu('lifestate_jobs_provider_actions', ('%s — advanced'):format(provider.label), options,
                 function(_, _, args)
+                    if type(args) ~= 'table' or type(args[1]) ~= 'table' then return end
                     local action = args[1]
 
                     local targetId = askPlayerId(action.label, ('Player Server ID for "%s"'):format(action.label))
