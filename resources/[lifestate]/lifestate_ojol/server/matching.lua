@@ -14,6 +14,7 @@ local serverConfig = require 'config.server'
 local drivers = require 'server.drivers'
 local fares = require 'server.fares'
 local rides = require 'server.rides'
+local spatial = require 'server.spatial'
 
 local M = {}
 
@@ -22,6 +23,73 @@ M.RideOffers = {}    -- [rideId]    = { [citizenid] = true }
 M.RideDeclines = {}  -- [rideId]    = { [citizenid] = true }  survives a rematch
 M.Cooldowns = {}     -- [driverCitizenid] = { [customerCitizenid] = expiresAtMs }
 M.SearchState = {}   -- [rideId] = { tier = number, timer = handle|nil }
+
+-- SEARCHING rides by pickup cell (scalability hardening). Added on search
+-- start (create/reopen, including recalculated pickups - the pickup is
+-- assigned before the rideSearching event fires) and removed on assignment
+-- or closure. refreshOffersForDriver queries this instead of every live ride.
+M.RideGrid = spatial.New(serverConfig.spatialCellSizeMeters or spatial.DefaultCellSize)
+
+-- Lightweight aggregate diagnostics. Counters are a few table increments per
+-- sweep (effectively zero overhead); the periodic report only exists while
+-- performanceDebug is enabled.
+M.Diag = {
+    sweeps = 0,
+    candidates = 0,
+    eligibilityChecks = 0,
+    offers = 0,
+    refreshQueries = 0,
+    armed = false,
+}
+
+---Snapshot of the aggregate counters (tests/diagnostics).
+---@return table
+function M.GetStats()
+    local online, searching, indexed = 0, 0, 0
+    if drivers.OnlineDrivers then
+        for _ in pairs(drivers.OnlineDrivers) do online = online + 1 end
+    end
+    for _ in pairs(M.SearchState) do searching = searching + 1 end
+    if drivers.DriverGrid then indexed = drivers.DriverGrid:Count() end
+    return {
+        onlineDrivers = online,
+        indexedDrivers = indexed,
+        searchingRides = searching,
+        indexedRides = M.RideGrid:Count(),
+        sweeps = M.Diag.sweeps,
+        candidates = M.Diag.candidates,
+        eligibilityChecks = M.Diag.eligibilityChecks,
+        offers = M.Diag.offers,
+        refreshQueries = M.Diag.refreshQueries,
+    }
+end
+
+local function maybeArmDiagnostics()
+    if M.Diag.armed or not serverConfig.performanceDebug then return end
+    M.Diag.armed = true
+
+    local interval = tonumber(serverConfig.performanceDebugIntervalMs) or 45000
+    if interval < 5000 then interval = 5000 end
+
+    local function report()
+        if not serverConfig.performanceDebug then
+            M.Diag.armed = false
+            return
+        end
+
+        local stats = M.GetStats()
+        print(('[ojol] perf online=%d indexedDrivers=%d searching=%d indexedRides=%d sweeps=%d candidates=%d eligibility=%d offers=%d refreshQueries=%d')
+            :format(stats.onlineDrivers, stats.indexedDrivers, stats.searchingRides,
+                stats.indexedRides, stats.sweeps, stats.candidates,
+                stats.eligibilityChecks, stats.offers, stats.refreshQueries))
+        M.Diag.sweeps, M.Diag.candidates = 0, 0
+        M.Diag.eligibilityChecks, M.Diag.offers, M.Diag.refreshQueries = 0, 0, 0
+
+        SetTimeout(interval, report)
+    end
+
+    SetTimeout(interval, report)
+end
 
 local RIDE_STATES = rides.STATES
 
@@ -177,6 +245,14 @@ local function removeOffer(rideId, citizenid, pushState)
     end
 end
 
+---Widest configured search radius: bounds refreshOffersForDriver queries so a
+---newly available driver only evaluates searches that could reach them.
+---@return number metres
+local function maxRadius()
+    local tiers = serverConfig.searchRadiusTiers
+    return tiers[#tiers]
+end
+
 ---Broadcast/refresh offers for a ride at its current tier, and prune drivers who
 ---stopped being eligible while the offer was out.
 ---@param ride table
@@ -206,12 +282,31 @@ local function sweep(ride)
     local declines = M.RideDeclines[ride.rideId] or {}
 
     -- Broadcast tier: every eligible driver gets the offer and races to accept
-    -- it (first valid acceptance wins). Iterating the online map - never all
-    -- players - keeps a sweep proportional to the drivers on duty, and sweeps
-    -- only ever run while at least one ride is searching.
-    for citizenid in pairs(drivers.OnlineDrivers) do
+    -- it (first valid acceptance wins). Candidates come from the driver spatial
+    -- index - nearby drivers only - instead of every online driver, so a sweep
+    -- costs O(nearby candidates) rather than O(onlineDrivers). The index is a
+    -- filter only: isEligible re-checks everything, exact distance included.
+    -- Sweeps only ever run while at least one ride is searching.
+    local candidates
+    if drivers.GetDriversNear then
+        candidates = drivers.GetDriversNear(ride.pickup, radius) or {}
+    else
+        -- Legacy stub drivers in unit tests expose no spatial API.
+        candidates = {}
+        for citizenid in pairs(drivers.OnlineDrivers or {}) do
+            candidates[#candidates + 1] = citizenid
+        end
+    end
+
+    M.Diag.sweeps = M.Diag.sweeps + 1
+    M.Diag.candidates = M.Diag.candidates + #candidates
+
+    for i = 1, #candidates do
+        local citizenid = candidates[i]
         if not byRide[citizenid] and not declines[citizenid] then
+            M.Diag.eligibilityChecks = M.Diag.eligibilityChecks + 1
             if isEligible(ride, citizenid, radius) then
+                M.Diag.offers = M.Diag.offers + 1
                 offerRideTo(ride, citizenid)
             end
         end
@@ -219,22 +314,38 @@ local function sweep(ride)
 end
 
 ---Offer this driver every searching ride they can serve. Used when a driver
----becomes available (clock-in) or is freed by a finished order.
+---becomes available (clock-in) or is freed by a finished order. Nearby
+---searches only (ride pickup index bounded by the widest tier); each ride's
+---own current tier radius still decides eligibility.
 ---@param citizenid string
 local function refreshOffersForDriver(citizenid)
-    for rideId, ride in pairs(rides.ActiveRides) do
-        if ride.status == RIDE_STATES.SEARCHING then
-            local declines = M.RideDeclines[rideId] or {}
+    local coords = drivers.GetPlayerCoordsByCitizenid
+        and drivers.GetPlayerCoordsByCitizenid(citizenid) or nil
+    if not coords then return end
+
+    M.Diag.refreshQueries = M.Diag.refreshQueries + 1
+
+    local rideIds = M.RideGrid:Query(coords.x, coords.y, maxRadius())
+    for i = 1, #rideIds do
+        local ride = rides.GetRide and rides.GetRide(rideIds[i]) or nil
+        if ride and ride.status == RIDE_STATES.SEARCHING then
+            local declines = M.RideDeclines[ride.rideId] or {}
             local byDriver = M.DriverOffers[citizenid]
             -- Same radius rule a sweep would apply right now.
-            if not declines[citizenid] and not (byDriver and byDriver[rideId]) then
-                if isEligible(ride, citizenid, currentRadius(rideId)) then
+            if not declines[citizenid] and not (byDriver and byDriver[ride.rideId]) then
+                M.Diag.eligibilityChecks = M.Diag.eligibilityChecks + 1
+                if isEligible(ride, citizenid, currentRadius(ride.rideId)) then
+                    M.Diag.offers = M.Diag.offers + 1
                     offerRideTo(ride, citizenid)
                 end
             end
         end
     end
 end
+
+-- Exported for tests and for explicit availability triggers; the event above
+-- is the production caller.
+M.RefreshOffersForDriver = refreshOffersForDriver
 
 -- Search lifecycle -----------------------------------------------------------
 
@@ -269,6 +380,14 @@ function M.StartSearch(ride)
     M.SearchState[ride.rideId] = { tier = 1, timer = nil }
     M.RideOffers[ride.rideId] = M.RideOffers[ride.rideId] or {}
 
+    -- Index the pickup before sweeping so refreshOffersForDriver can find this
+    -- search immediately. Reopens re-add (same id, possibly recalculated
+    -- pickup - Insert moves the entry).
+    if ride.pickup then
+        M.RideGrid:Insert(ride.rideId, ride.pickup.x, ride.pickup.y)
+    end
+    maybeArmDiagnostics()
+
     sweep(ride)
     scheduleExpansion(ride)
 end
@@ -281,6 +400,8 @@ function M.StopSearch(rideId)
         if state.timer then ClearTimeout(state.timer) end
         M.SearchState[rideId] = nil
     end
+
+    M.RideGrid:Remove(rideId)
 
     local byRide = M.RideOffers[rideId]
     if not byRide then return end
@@ -484,6 +605,9 @@ function M.Shutdown()
     M.RideDeclines = {}
     M.Cooldowns = {}
     M.SearchState = {}
+    M.RideGrid = spatial.New(serverConfig.spatialCellSizeMeters or spatial.DefaultCellSize)
+    M.Diag.sweeps, M.Diag.candidates = 0, 0
+    M.Diag.eligibilityChecks, M.Diag.offers, M.Diag.refreshQueries = 0, 0, 0
 end
 
 return M

@@ -43,7 +43,15 @@ package.preload['server.database'] = function()
     return {
         FetchAllDrivers = function()
             local list = {}
-            for _, row in pairs(dbState.rows) do list[#list + 1] = row end
+            for _, row in pairs(dbState.rows) do
+                -- Persistent rating/profile fields travel on the row itself
+                -- (SELECT *), which is what hydrates the memory-only driver
+                -- snapshot at load.
+                local copy = {}
+                for key, value in pairs(row) do copy[key] = value end
+                for key, value in pairs(dbState.stats[row.citizenid] or {}) do copy[key] = value end
+                list[#list + 1] = copy
+            end
             return list
         end,
         FetchDriver = function(citizenid)
@@ -556,10 +564,12 @@ end)
 h.test('the inspect export reports online/busy/rating and an unknown player', function()
     reset()
     seeded()
+    -- Aggregates are read at load (SELECT *), which is what hydrates the
+    -- memory-only snapshot: seed them before the drivers load.
+    dbState.stats[CIT] = { rating_sum = 47, rating_count = 10 }
     drivers.LoadDrivers()
     drivers.OnlineDrivers[CIT] = true
     drivers.BusyDrivers[CIT] = true
-    dbState.stats[CIT] = { rating_sum = 47, rating_count = 10 }
 
     local state = exports.lifestate_ojol:getDriverAdminState(target())
     h.eq(state.online, true, 'online')

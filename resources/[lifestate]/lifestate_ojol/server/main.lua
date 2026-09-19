@@ -658,6 +658,11 @@ local function onStartup()
     company.RefreshCompanyBalance()
     drivers.LoadDrivers()
 
+    -- Server-internal spatial index refresh for online drivers (2 s cadence,
+    -- ped reads only, no network traffic). Matching degrades to exact checks
+    -- on live coordinates regardless, so this only affects candidate cost.
+    drivers.StartPositionRefresh()
+
     -- Rides cannot survive a restart (their runtime state is gone), so any ride
     -- left non-terminal in the database is closed as FAILED.
     local failedRides = rides.RecoverOnStartup()

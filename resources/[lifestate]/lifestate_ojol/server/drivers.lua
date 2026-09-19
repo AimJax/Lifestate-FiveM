@@ -1,4 +1,6 @@
 local db = require 'server.database'
+local spatial = require 'server.spatial'
+local serverConfig = require 'config.server'
 
 local M = {}
 
@@ -14,6 +16,11 @@ M.OnlineDrivers = {}     -- [citizenid] = true while clocked in (registered + on
 M.BusyDrivers = {}       -- [citizenid] = true while an accepted ride is active (Phase 3B+)
 M.CitizenidBySource = {} -- [source] = citizenid, connection-scoped mapping for cleanup
 M.SourceByCitizenid = {} -- [citizenid] = source
+
+-- Spatial candidate index for ONLINE drivers (scalability hardening).
+-- Candidate filter only: eligibility (registered/online/busy/connected/radius)
+-- is still decided by the authoritative checks in matching.lua.
+M.DriverGrid = spatial.New(serverConfig.spatialCellSizeMeters or spatial.DefaultCellSize)
 
 local RANKS = { 'driver', 'senior_driver', 'supervisor', 'ceo' }
 local CEO_MANAGEABLE = { driver = true, senior_driver = true, supervisor = true }
@@ -35,6 +42,14 @@ local function buildRuntimeDriver(row)
         profilePhoto = row.profile_photo,
         registeredBy = row.registered_by,
         registeredAt = row.registered_at,
+        -- Frequently-read persistent fields cached at load so the driver-app
+        -- snapshot is memory-only (no per-view SQL). Rating aggregates are
+        -- bumped in place by ApplyRatingToCache on the single write path
+        -- (rides.SubmitRating); profile photos have no server write path, so
+        -- the loaded value cannot go stale except via external DB edits
+        -- (re-hydrated on restart).
+        ratingSum = tonumber(row.rating_sum) or 0,
+        ratingCount = tonumber(row.rating_count) or 0,
     }
 end
 
@@ -43,6 +58,7 @@ end
 ---safe rehire and are never treated as authorization (see IsRegisteredDriver).
 function M.LoadDrivers()
     M.RegisteredDrivers = {}
+    M.DriverGrid = spatial.New(serverConfig.spatialCellSizeMeters or spatial.DefaultCellSize)
     local rows = db.FetchAllDrivers()
 
     for i = 1, #rows do
@@ -190,6 +206,8 @@ function M.RegisterDriver(citizenid, registeredBy)
         profilePhoto = nil,
         registeredBy = registeredBy,
         registeredAt = os.time(),
+        ratingSum = 0,
+        ratingCount = 0,
     }
 
     return true, 'registered'
@@ -217,6 +235,7 @@ function M.FireDriver(citizenid)
     driver.active = false
     M.OnlineDrivers[citizenid] = nil
     M.BusyDrivers[citizenid] = nil
+    M.DriverGrid:Remove(citizenid)
     -- The connection mapping (source <-> citizenid) is NOT authorization and is
     -- intentionally kept so the fired player still receives the revocation notice.
 
@@ -258,6 +277,8 @@ function M.AssignCEO(citizenid, assignedBy)
             profilePhoto = nil,
             registeredBy = assignedBy,
             registeredAt = os.time(),
+            ratingSum = 0,
+            ratingCount = 0,
         }
     elseif target.active ~= true then
         -- Admin intent is explicit: a fired driver can be reactivated as CEO.
@@ -343,6 +364,22 @@ function M.DemoteDriver(citizenid)
     return true, nil, nextRank
 end
 
+---Bump the cached rating aggregates after a rating is durably recorded.
+---Called by the single server write path (rides.SubmitRating) once the
+---rating transaction commits, so the memory-only snapshot never goes stale.
+---@param citizenid string
+---@param rating number integer 1..5
+function M.ApplyRatingToCache(citizenid, rating)
+    local driver = M.GetOjolDriver(citizenid)
+    if not driver then return end
+
+    rating = math.floor(tonumber(rating) or 0)
+    if rating < 1 or rating > 5 then return end
+
+    driver.ratingSum = (tonumber(driver.ratingSum) or 0) + rating
+    driver.ratingCount = (tonumber(driver.ratingCount) or 0) + 1
+end
+
 ---Clock in / out. Runtime-only state; never written to the database.
 ---Clock-in requires registered + active + not busy.
 ---Clock-out requires registered and NOT busy: an active order must be finished or
@@ -357,6 +394,7 @@ function M.SetDriverOnline(citizenid, desired)
     if desired then
         if M.IsDriverBusy(citizenid) then return false, 'busy' end
         M.OnlineDrivers[citizenid] = true
+        M.IndexDriver(citizenid)
         return true
     end
 
@@ -364,30 +402,22 @@ function M.SetDriverOnline(citizenid, desired)
     if M.IsDriverBusy(citizenid) then return false, 'busy_active_ride' end
 
     M.OnlineDrivers[citizenid] = nil
+    M.DriverGrid:Remove(citizenid)
     return true
 end
 
----Aggregate state snapshot for the driver app / client.
+---Aggregate state snapshot for the driver app / client. Memory-only: rating
+---aggregates and the profile photo live on the runtime record (hydrated at
+---load, bumped by ApplyRatingToCache). Registration/rank/active stay
+---authoritative from the same record; no authorization state is cached.
 ---@param citizenid string
 ---@return table
 function M.GetDriverStateSnapshot(citizenid)
     local driver = M.GetOjolDriver(citizenid)
     local registered = driver ~= nil and driver.active == true
 
-    local ratingSum = 0
-    local ratingCount = 0
-    local profilePhoto = nil
-
-    if registered then
-        -- Single indexed lookup for the persistent fields that are not cached
-        -- (rating + profile). Preserved across fire/rehire.
-        local row = db.FetchDriver(citizenid)
-        if row then
-            ratingSum = row.rating_sum or 0
-            ratingCount = row.rating_count or 0
-            profilePhoto = row.profile_photo
-        end
-    end
+    local ratingSum = registered and (tonumber(driver.ratingSum) or 0) or 0
+    local ratingCount = registered and (tonumber(driver.ratingCount) or 0) or 0
 
     return {
         registered = registered,
@@ -395,9 +425,61 @@ function M.GetDriverStateSnapshot(citizenid)
         online = registered and M.IsDriverOnline(citizenid) or false,
         busy = M.IsDriverBusy(citizenid),
         rank = registered and driver.rank or nil,
-        profilePhoto = registered and profilePhoto or nil,
+        profilePhoto = registered and driver.profilePhoto or nil,
         rating = ratingCount > 0 and (ratingSum / ratingCount) or nil,
     }
+end
+
+-- Spatial index maintenance --------------------------------------------------
+-- Busy drivers stay indexed on purpose: the busy flag is a cheap table lookup
+-- inside the authoritative eligibility check, and keeping them avoids
+-- index churn on every accept/complete. Fired/offline/disconnected drivers
+-- are always removed.
+
+---(Re)insert an online driver at their current server-observed position.
+---No position available (ped not resolvable) means no index entry, which
+---matches eligibility exactly: without coords a driver can never be offered.
+---@param citizenid string
+function M.IndexDriver(citizenid)
+    if not citizenid or not M.OnlineDrivers[citizenid] then return end
+
+    local ok, coords = pcall(M.GetPlayerCoordsByCitizenid, citizenid)
+    if not ok or not coords then return end
+
+    M.DriverGrid:Insert(citizenid, coords.x, coords.y)
+end
+
+---Online driver candidates near a map point. Exact-distance pre-filtered by
+---stored index positions; callers re-validate with live coordinates.
+---@param point table|vector3
+---@param radius number metres
+---@return table citizenids array, deduplicated
+function M.GetDriversNear(point, radius)
+    if not point then return {} end
+    return M.DriverGrid:Query(point.x, point.y, radius)
+end
+
+---Bounded low-frequency position refresh for ONLINE drivers only.
+---Interval justification: at 40 m/s a driver moves ~80 m per 2 s tick, far
+---below the 2000 m cell size and the 2000 m smallest search tier, so matching
+---accuracy is unaffected; the index is a candidate filter and exact distance
+---is always re-checked with live coordinates. Server-internal only: native
+---ped reads, no network traffic, entry moves only on cell change.
+function M.StartPositionRefresh()
+    if M.PositionRefreshRunning then return end
+    M.PositionRefreshRunning = true
+
+    local interval = tonumber(serverConfig.driverPositionRefreshMs) or 2000
+    if interval < 500 then interval = 500 end
+
+    CreateThread(function()
+        while true do
+            Wait(interval)
+            for citizenid in pairs(M.OnlineDrivers) do
+                M.IndexDriver(citizenid)
+            end
+        end
+    end)
 end
 
 -- Connection lifecycle ------------------------------------------------------
@@ -409,6 +491,7 @@ end
 function M.ClearOnlineState(citizenid)
     M.OnlineDrivers[citizenid] = nil
     M.BusyDrivers[citizenid] = nil
+    M.DriverGrid:Remove(citizenid)
 end
 
 ---Clear runtime mappings when a player drops. Persistent registration survives.
@@ -422,6 +505,7 @@ function M.CleanupSource(source)
 
     M.OnlineDrivers[citizenid] = nil
     M.BusyDrivers[citizenid] = nil
+    M.DriverGrid:Remove(citizenid)
     M.CitizenidBySource[source] = nil
 end
 

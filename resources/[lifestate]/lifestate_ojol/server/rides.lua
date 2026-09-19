@@ -1202,6 +1202,10 @@ function M.SubmitRating(customerCitizenid, rideId, rating)
         return false, ratedOk and saved ~= nil and 'already_rated' or 'database_error'
     end
 
+    -- The aggregates are durably recorded: bump the runtime cache so the
+    -- memory-only snapshot reflects the new average immediately.
+    drivers.ApplyRatingToCache(driverCitizenid, rating)
+
     local ride = M.GetRide(rideId)
     if ride then ride.rated = true end
 
