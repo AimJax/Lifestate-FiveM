@@ -8,29 +8,27 @@
 local registry = require 'server.registry'
 local service = require 'server.service'
 local frameworkJobs = require 'server.frameworkjobs'
+local providerapi = require 'server.providerapi'
 local config = require 'config.server'
 
 -- Provider API ----------------------------------------------------------------
 -- What a future job needs to appear in the admin menu: one registration call.
 -- The menu itself is generated from the registry, so nothing else changes.
+--
+-- Ownership is implicit: server/providerapi.lua resolves it from
+-- GetInvokingResource(), so a provider cannot claim (or take over) somebody
+-- else's id, and only its owner can unregister it.
 
 ---@param definition JobProviderDefinition
 ---@return boolean ok, string outcomeOrReason
 exports('RegisterProvider', function(definition)
-    local ok, outcome = registry.Register(definition)
-
-    if ok then
-        print(('[lifestate_jobs] provider %s %s (%s)'):format(
-            tostring(definition and definition.id), outcome, tostring(definition and definition.type)))
-    end
-
-    return ok, outcome
+    return providerapi.Register(definition)
 end)
 
 ---@param id string
 ---@return boolean ok, string? reason
 exports('UnregisterProvider', function(id)
-    return registry.Unregister(id)
+    return providerapi.Unregister(id)
 end)
 
 ---Read-only diagnostics: id / label / type / owning resource of every provider.
@@ -95,6 +93,12 @@ RegisterNetEvent('lifestate_jobs:server:backToAdminMenu', function()
 end)
 
 -- Lifecycle -------------------------------------------------------------------
+
+-- Drop every provider that belonged to a stopped resource, so the registry never
+-- keeps a function reference into a resource that is gone (Ojol stopping removes
+-- the Ojol provider; qbx_core stopping removes the framework jobs, which the
+-- adapter repopulates on its next start/sync).
+providerapi.Start()
 
 AddEventHandler('onServerResourceStart', function(resourceName)
     if resourceName ~= GetCurrentResourceName() then return end

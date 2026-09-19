@@ -23,6 +23,13 @@ local M = {}
 M.PREFIX = 'qbx:'
 M.TYPE = 'framework_job'
 
+---These providers are registered by THIS resource but belong to qbx_core: they are
+---a view over the framework's job table, so qbx_core's stop is what must remove
+---them (and its restart re-syncs them). The owner is therefore passed explicitly
+---to the registry - the export boundary is not involved, and nothing here trusts a
+---definition field for ownership.
+M.OWNER = 'qbx_core'
+
 local function describeError(err)
     if type(err) == 'table' then return tostring(err.message or err.code or 'unknown error') end
     if err == nil then return 'unknown error' end
@@ -75,7 +82,6 @@ local function definition(name, job)
         id = providerId,
         label = job.label or name,
         type = M.TYPE,
-        resource = 'qbx_core',
         order = 200,
 
         -- Resolved lazily and live, so a runtime grade change is picked up without
@@ -175,7 +181,7 @@ function M.Sync()
 
     for name, job in pairs(jobs) do
         if type(name) == 'string' and type(job) == 'table' and isOffered(name) then
-            local registered, outcome = registry.Register(definition(name, job))
+            local registered, outcome = registry.Register(definition(name, job), M.OWNER)
 
             if registered then
                 offered[M.PREFIX .. name] = true
@@ -187,9 +193,9 @@ function M.Sync()
     -- Drop providers whose job no longer exists in qbx_core (runtime RemoveJob) or
     -- that a config change just excluded.
     for _, provider in ipairs(registry.List()) do
-        local isFrameworkJob = provider.resource == 'qbx_core' and provider.id:sub(1, #M.PREFIX) == M.PREFIX
+        local isFrameworkJob = provider.resource == M.OWNER and provider.id:sub(1, #M.PREFIX) == M.PREFIX
         if isFrameworkJob and not offered[provider.id] then
-            registry.Unregister(provider.id)
+            registry.Unregister(provider.id, M.OWNER)
         end
     end
 

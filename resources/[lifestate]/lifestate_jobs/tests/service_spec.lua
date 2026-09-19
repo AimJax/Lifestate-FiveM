@@ -67,8 +67,26 @@ end
 
 h.reload('server.registry', 'server.service')
 
-local registry = require 'server.registry'
+local realRegistry = require 'server.registry'
 local service = require 'server.service'
+
+-- Ownership is an explicit argument to the registry (resolved from
+-- GetInvokingResource() at the export boundary, which server/providerapi.lua owns
+-- and tests/provider_ownership_spec.lua proves). Every provider in this spec belongs
+-- to the same stub resource, so the owner is supplied once here instead of at each
+-- call site; the registry itself is the real module.
+local OWNER = 'lifestate_ojol'
+
+local registry = {
+    Reset = realRegistry.Reset,
+    List = realRegistry.List,
+    Get = realRegistry.Get,
+    Count = realRegistry.Count,
+    ByType = realRegistry.ByType,
+    ResolveGrades = realRegistry.ResolveGrades,
+    Register = function(def, owner) return realRegistry.Register(def, owner or OWNER) end,
+    Unregister = function(id, owner) return realRegistry.Unregister(id, owner or OWNER) end,
+}
 
 -- Fixtures --------------------------------------------------------------------
 

@@ -397,6 +397,43 @@ h.test('inspect reports the primary job versus a mere membership', function()
     h.eq(none.rank, nil, 'no rank')
 end)
 
+h.test('framework providers are owned by qbx_core, so its stop cleans them up', function()
+    reset()
+    frameworkJobs.Sync()
+
+    h.eq(provider('police').resource, frameworkJobs.OWNER, 'the adapter passes its owner explicitly')
+    h.eq(frameworkJobs.OWNER, 'qbx_core', 'the framework owns its own providers')
+
+    -- Same call the onServerResourceStop handler makes in providerapi.
+    local removed = registry.UnregisterByResource('qbx_core')
+
+    h.eq(removed, 2, 'both framework providers are dropped')
+    h.eq(registry.Count(), 0, 'no stale provider is left behind')
+end)
+
+h.test('a qbx_core restart repopulates the framework providers without duplicates', function()
+    reset()
+    frameworkJobs.Start()
+    h.eq(registry.Count(), 2, 'baseline')
+
+    -- qbx_core stops: its providers go (the registry no longer holds references into
+    -- a framework that is not running).
+    registry.UnregisterByResource('qbx_core')
+    h.eq(registry.Count(), 0, 'cleaned up')
+
+    -- ...then it starts again, which the adapter hooks.
+    host.handlers.onServerResourceStart('qbx_core')
+    h.eq(#host.threads, 1, 're-sync scheduled')
+    host.threads[1]()
+
+    h.eq(registry.Count(), 2, 'providers are back')
+    h.ok(provider('police'), 'police is offered again')
+
+    local added = frameworkJobs.Sync()
+    h.eq(added, 0, 'a further sync adds nothing')
+    h.eq(registry.Count(), 2, 'and creates no duplicates')
+end)
+
 h.test('the provider id is the prefixed job name, so it cannot collide with a profession', function()
     reset()
     h.eq(frameworkJobs.ProviderId('police'), 'qbx:police', 'prefix')

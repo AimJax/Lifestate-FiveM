@@ -36,8 +36,9 @@ exports.lifestate_jobs:RegisterProvider({
     id = 'ojol',                 -- unique; 'qbx:<job>' is reserved for the adapter
     label = 'Ojol',              -- what the menu shows
     type = 'profession',         -- 'profession' | 'framework_job' | your own
-    resource = GetCurrentResourceName(),
     order = 10,                  -- sort hint (framework jobs use 200)
+    -- No `resource` field: ownership is resolved by lifestate_jobs from the
+    -- invoking resource (see below), so it cannot be declared - or claimed.
 
     grades = { { level = 0, label = 'Driver' } },   -- optional, or a function
     give   = function(target, options) ... end,     -- optional
@@ -60,6 +61,30 @@ Rules the registry enforces (see `server/registry.lua`):
 - a provider needs at least one of `give`/`remove`, and one action's `handler`
   never leaves the server.
 
+## Ownership and lifecycle
+
+Ownership is resolved at the export boundary (`server/providerapi.lua`) from
+`GetInvokingResource()` — the native that names the resource which actually made
+the call, and which a caller cannot influence:
+
+| Call | Owner |
+| --- | --- |
+| `exports.lifestate_jobs:RegisterProvider(def)` | the calling resource |
+| `exports.lifestate_jobs:UnregisterProvider(id)` | only the current owner may |
+
+A `resource` field in the definition is ignored (the real owner overwrites it), so
+one resource cannot claim another's provider id — `id_conflict` — and there is no
+overwrite argument to forge. The registry takes the owner as an explicit parameter
+and refuses a registration without one (`owner_required`); framework-job providers
+are registered internally by the adapter with the explicit owner `qbx_core`.
+
+Cleanup is ownership-driven: when a resource stops, every provider it owned is
+dropped (`onServerResourceStop` -> `registry.UnregisterByResource`), including the
+ordered-id cache, so the menu can never hold a stale reference into a resource that
+is gone. Stopping `lifestate_ojol` therefore removes the Ojol provider immediately;
+stopping `qbx_core` removes the framework-job providers, which the adapter
+repopulates on its next start or sync.
+
 A handler returns `success, outcome, detail?`:
 
 - `outcome` is a machine string (`registered`, `reactivated`, `removed`,
@@ -71,7 +96,9 @@ A handler returns `success, outcome, detail?`:
 
 ## Service and authorization
 
-`server/service.lua` is the only door to a provider. For every entry point it:
+`server/service.lua` is the only door to a provider. (The registry is reached only
+through `server/providerapi.lua`, which is what makes ownership unspoofable.) For
+every entry point it:
 
 1. authorizes the caller server-side (`ACE` from `config.perm`, plus admin duty
    via `qbx_core:IsOptin` when `config.requireOptin`),
@@ -98,11 +125,14 @@ recorded under [`patches/qbx_adminmenu/`](../../../../patches/qbx_adminmenu/READ
 (see `.freebuff/luacheck/run_specs.mjs`, or any harness that can execute
 `tests/run.lua`):
 
-- `registry_spec.lua` — definition validation, ownership, ordering, grades;
+- `registry_spec.lua` — definition validation, explicit ownership, ordering, grades,
+  owner-only unregistration and `UnregisterByResource` (including cache invalidation);
 - `service_spec.lua` — authorization, target resolution, Give/Remove, provider
   isolation, the generated catalog, View Player Jobs and advanced actions;
-- `frameworkjobs_spec.lua` — discovery/sync, live grade reads, and the Qbox
-  `SetJob` / `RemovePlayerFromJob` write paths.
+- `provider_ownership_spec.lua` — the export boundary: impersonation attempts,
+  forged overwrite attempts, owner-only unregister, and resource-stop cleanup;
+- `frameworkjobs_spec.lua` — discovery/sync, live grade reads, the qbx_core
+  stop/restart lifecycle, and the Qbox `SetJob` / `RemovePlayerFromJob` write paths.
 
 Ojol's side of the contract (provider registration, Give/Remove/CEO semantics,
 live phone-app refresh) is proven in

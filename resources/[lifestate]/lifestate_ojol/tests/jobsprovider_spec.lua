@@ -128,11 +128,27 @@ local qbx = {
     end,
 }
 
+---The registry export, behaving like the real boundary: one entry per provider id,
+---re-registration of the same id by the same owner is an update (never a second
+---entry), and ownership is decided there, not here.
 local jobsRegistry = {
     RegisterProvider = function(definition)
         host.registerCalls = host.registerCalls + 1
         host.provider = definition
-        return host.registerOutcome[1], host.registerOutcome[2]
+        if host.registerOutcome[1] == false then
+            host.lastOutcome = host.registerOutcome[2]
+            return false, host.registerOutcome[2]
+        end
+
+        local existing = host.providers[definition.id]
+        host.providers[definition.id] = definition
+        host.lastOutcome = existing and 'updated' or 'registered'
+
+        return true, host.lastOutcome
+    end,
+    UnregisterProvider = function(id)
+        host.providers[id] = nil
+        return true
     end,
 }
 
@@ -179,6 +195,7 @@ local function reset()
     dbState.fail = {}
 
     host.provider = nil
+    host.providers = {}
     host.registerCalls = 0
     host.registerOutcome = { true, 'registered' }
     host.resourceState = 'started'
@@ -240,10 +257,48 @@ h.test('the provider registers itself with the generic registry exactly once', f
     h.eq(type(host.provider.give), 'function', 'give handler')
     h.eq(type(host.provider.remove), 'function', 'remove handler')
     h.eq(type(host.provider.inspect), 'function', 'inspect handler')
-    h.eq(host.provider.resource, 'lifestate_ojol', 'owning resource')
+    -- Ownership is not declared here: lifestate_jobs records the invoking resource
+    -- as the owner, which is what stops another resource impersonating Ojol.
+    h.eq(host.provider.resource, nil, 'no owner declared in the definition')
     h.eq(#host.provider.actions, 1, 'one provider action')
     h.eq(host.provider.actions[1].id, 'setCeo', 'action id')
     h.eq(host.provider.actions[1].confirm, true, 'CEO assignment asks for confirmation')
+end)
+
+h.test('the provider declares no owner of its own: the registry records the caller', function()
+    reset()
+    jobsprovider.Register()
+
+    -- Ownership is resolved at the registry's export boundary from the invoking
+    -- resource, so a `resource` field here would be ignored anyway (and could only
+    -- invite impersonation). It must not be declared.
+    h.eq(host.provider.resource, nil, 'no resource field in the definition')
+end)
+
+h.test('re-registering never duplicates the provider, even after a registry restart', function()
+    reset()
+    jobsprovider.Register()
+    h.eq(host.registerCalls, 1, 'registered once')
+    h.eq(host.lastOutcome, 'registered', 'first registration')
+    h.eq(host.providers.ojol ~= nil, true, 'one provider in the registry')
+
+    jobsprovider.Register()
+    h.eq(host.lastOutcome, 'updated', 'a second call is an update')
+    h.eq(host.registerCalls, 2, 'but it did go through')
+
+    local count = 0
+    for _ in pairs(host.providers) do count = count + 1 end
+    h.eq(count, 1, 'still exactly one olol provider')
+
+    -- The registry restarted (or cleaned up this owner's entries): re-registering
+    -- must restore exactly one provider, not two.
+    host.providers = {}
+    jobsprovider.Register()
+    h.eq(host.lastOutcome, 'registered', 'registered again from scratch')
+
+    count = 0
+    for _ in pairs(host.providers) do count = count + 1 end
+    h.eq(count, 1, 'one provider after the restart')
 end)
 
 h.test('a missing registry fails cleanly instead of half-registering', function()

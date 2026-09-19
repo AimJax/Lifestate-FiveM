@@ -29,7 +29,10 @@ local function definition()
         id = M.PROVIDER_ID,
         label = 'Ojol',
         type = 'profession',
-        resource = GetCurrentResourceName(),
+        -- No `resource` field on purpose: lifestate_jobs records the real caller
+        -- (GetInvokingResource) as the owner, so ownership cannot be declared - or
+        -- claimed - from here. Ojol is also removed from the registry
+        -- automatically when this resource stops.
         order = 10,
 
         -- Ranks are not admin-assignable through Give/Remove: every rank below CEO

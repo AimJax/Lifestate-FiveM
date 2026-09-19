@@ -8,6 +8,7 @@ local h = require 'tests.harness'
 -- resolution, provider isolation and framework-adapter behaviour.
 require 'tests.registry_spec'
 require 'tests.service_spec'
+require 'tests.provider_ownership_spec'
 require 'tests.frameworkjobs_spec'
 
 h.finish()

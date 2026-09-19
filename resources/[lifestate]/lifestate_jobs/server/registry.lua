@@ -6,11 +6,20 @@
 --
 --     ADMIN UI -> generic job service -> provider definition -> job backend
 --
--- Two rules matter for the admin menu's stability:
+-- Three rules matter for the admin menu's stability:
 --
---   * a malformed definition is REJECTED with a reason instead of raising, and
+--   * a malformed definition is REJECTED with a reason instead of raising,
+--   * OWNERSHIP IS AN EXPLICIT PARAMETER (`Register(def, owner)`), never read from
+--     the definition, so no caller can declare itself the owner of another
+--     resource's provider id (server/providerapi.lua resolves the real owner from
+--     GetInvokingResource() at the export boundary and passes it in), and
 --   * a definition is only replaced by its own owner (idempotent re-registration
 --     after a restart), so one resource can never hijack another's provider id.
+--     There is no overwrite flag - cross-resource takeover does not exist.
+--
+-- Cleanup is ownership-driven too: `UnregisterByResource` drops every provider a
+-- stopped resource owned, so the registry can never keep calling into a resource
+-- that is gone.
 --
 -- Isolation of provider CALLS (pcall around give/remove/inspect) belongs to
 -- server/service.lua, so a throwing provider cannot break the menu either.
@@ -41,7 +50,8 @@ local M = {}
 ---@field id string unique provider id
 ---@field label string display name
 ---@field type string 'profession' | 'framework_job' | future types
----@field resource string? owning resource (diagnostics); defaults to the caller
+---@field resource string? IGNORED on input: the registry overwrites it with the
+---                    owner it was given (diagnostics / cleanup only)
 ---@field order number? sort hint, lower first (default 100)
 ---@field grades JobProviderGrade[]|fun(): JobProviderGrade[]? optional
 ---@field give fun(target, options): boolean, string?, table? optional
@@ -90,17 +100,17 @@ local function validate(def)
     return true
 end
 
+---Copy a definition, forcing the owner. `def.resource` is deliberately dropped:
+---ownership comes from the caller (the export boundary) and nowhere else.
 ---@param def JobProviderDefinition
+---@param owner string
 ---@return JobProviderDefinition
-local function normalize(def)
-    local resource = def.resource
-    if not isNonEmptyString(resource) then resource = GetInvokingResource() or 'unknown' end
-
+local function normalize(def, owner)
     return {
         id = def.id,
         label = def.label,
         type = def.type,
-        resource = resource,
+        resource = owner,
         order = def.order or 100,
         grades = def.grades,
         give = def.give,
@@ -110,25 +120,27 @@ local function normalize(def)
     }
 end
 
----Register (or replace) a provider definition.
----Re-registering the same id from the same resource is an idempotent update, so a
+---Register (or replace) a provider definition on behalf of `owner`.
+---Re-registering the same id from the same owner is an idempotent update, so a
 ---resource restart or a lazy re-sync cannot create duplicates.
 ---@param def JobProviderDefinition
----@param opts table? { overwrite = boolean } force an update across resources
+---@param owner string owning resource, resolved by the caller (never from `def`)
 ---@return boolean ok, string outcomeOrReason
-function M.Register(def, opts)
+function M.Register(def, owner)
     local valid, reason = validate(def)
     if not valid then
         print(('[lifestate_jobs] provider rejected (%s)'):format(tostring(reason)))
         return false, reason
     end
 
-    local normalized = normalize(def)
+    if not isNonEmptyString(owner) then return false, 'owner_required' end
+
+    local normalized = normalize(def, owner)
     local existing = providers[normalized.id]
 
-    if existing and existing.resource ~= normalized.resource and not (opts and opts.overwrite) then
+    if existing and existing.resource ~= owner then
         print(('[lifestate_jobs] provider id conflict: %s is owned by %s, %s tried to register it'):format(
-            normalized.id, tostring(existing.resource), tostring(normalized.resource)))
+            normalized.id, tostring(existing.resource), owner))
         return false, 'id_conflict'
     end
 
@@ -138,15 +150,45 @@ function M.Register(def, opts)
     return true, existing and 'updated' or 'registered'
 end
 
+---Remove a provider, but only for its owner.
 ---@param id string
+---@param owner string owning resource, resolved by the caller
 ---@return boolean ok, string? reason
-function M.Unregister(id)
+function M.Unregister(id, owner)
     if not isNonEmptyString(id) then return false, 'invalid_id' end
+    if not isNonEmptyString(owner) then return false, 'owner_required' end
     if not providers[id] then return false, 'not_registered' end
+
+    -- Only the owning resource may drop its provider: an unrelated resource must
+    -- not be able to unregister (or silence) another resource's job.
+    if providers[id].resource ~= owner then return false, 'owner_mismatch' end
 
     providers[id] = nil
     sortedIds = nil
     return true
+end
+
+---Drop every provider owned by a resource that is no longer running.
+---Called from the onServerResourceStop handler, so a stopped provider can never
+---leave a stale function reference behind.
+---@param owner string
+---@return number removed
+function M.UnregisterByResource(owner)
+    if not isNonEmptyString(owner) then return 0 end
+
+    local removed = 0
+    for id, provider in pairs(providers) do
+        if provider.resource == owner then
+            providers[id] = nil
+            removed = removed + 1
+        end
+    end
+
+    -- The ordered id cache is derived state: leaving it behind would keep handing
+    -- the menu ids that no longer resolve.
+    if removed > 0 then sortedIds = nil end
+
+    return removed
 end
 
 ---@param id string
