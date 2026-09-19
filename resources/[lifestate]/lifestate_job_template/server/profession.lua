@@ -18,8 +18,27 @@ function M.Register(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return false, 'invalid_target' end
     local member = M.Members[citizenid]
     if member and member.active then return false, 'already_registered' end
-    if member then db.Reactivate(citizenid); member.active = true; return true, 'reactivated' end
-    db.Insert(citizenid)
+    if member then
+        -- Persistence first: runtime `active` flips only after the row is durable.
+        -- NOTE: only a thrown DB exception counts as failure here (same as Ojol).
+        -- An update reporting 0 affected rows legitimately means "already same
+        -- value" under oxmysql/MySQL, so it must NOT be treated as an error.
+        local ok, err = pcall(db.Reactivate, citizenid)
+        if not ok then
+            print(('[lifestate_job_template] Reactivate DB error for %s: %s'):format(citizenid, tostring(err)))
+            return false, 'database_error'
+        end
+        member.active = true
+        return true, 'reactivated'
+    end
+    -- Persistence first: the runtime record exists only after the row is durable.
+    -- Same note as above: only a thrown exception (pcall failure) is a DB error;
+    -- insert on this VARCHAR-PK table has no meaningful insert-id to validate.
+    local ok, err = pcall(db.Insert, citizenid)
+    if not ok then
+        print(('[lifestate_job_template] Register DB error for %s: %s'):format(citizenid, tostring(err)))
+        return false, 'database_error'
+    end
     M.Members[citizenid] = { citizenid = citizenid, level = 0, active = true, registeredAt = os.time(), completedTasks = 0 }
     return true, 'registered'
 end
@@ -27,7 +46,17 @@ end
 function M.Remove(citizenid)
     local member = M.Members[citizenid]
     if not member or not member.active then return false, 'not_registered' end
-    db.Deactivate(citizenid); member.active = false; M.Online[citizenid] = nil; M.Busy[citizenid] = nil
+    -- Persistence first: runtime duty/busy clear only after deactivation is durable.
+    -- Same note: only a thrown exception is failure; 0 affected rows can mean
+    -- "already same value" and must not be treated as an error.
+    local ok, err = pcall(db.Deactivate, citizenid)
+    if not ok then
+        print(('[lifestate_job_template] Remove DB error for %s: %s'):format(citizenid, tostring(err)))
+        return false, 'database_error'
+    end
+    member.active = false
+    M.Online[citizenid] = nil
+    M.Busy[citizenid] = nil
     return true, 'removed'
 end
 
