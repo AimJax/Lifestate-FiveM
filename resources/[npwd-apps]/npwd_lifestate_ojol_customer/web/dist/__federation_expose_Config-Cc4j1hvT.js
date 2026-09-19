@@ -1,5 +1,5 @@
 import { importShared } from "./__federation_fn_import-eda1j03z.js";
-import { A as App } from "./App-sqN9DMjn.js";
+import { A as App } from "./App-CM9ZBv_A.js";
 const React = await importShared("react");
 const path = "/npwd_lifestate_ojol_customer";
 const Icon = (props) => React.createElement(

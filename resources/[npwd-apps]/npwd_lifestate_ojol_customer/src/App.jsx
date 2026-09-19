@@ -61,6 +61,32 @@ const formatDistance = (metres) => {
 
 const formatRupiah = (amount) => `Rp${Number(amount || 0).toLocaleString('id-ID')}`
 
+// The server callback answers { success, data: quote }; older builds of this app
+// stored the whole ENVELOPE as the quote, so every field rendered as -- / Rp0.
+// Everything displayed must come from the quote itself and be structurally
+// validated here: a malformed quote is an error state, never a fake Rp0.
+const normalizeQuote = (quote) => {
+  if (!quote || typeof quote !== 'object') return null
+
+  const distance = Number(quote.distanceMeters)
+  const fare = Number(quote.fare)
+  const payout = Number(quote.driverPayout)
+  if (!Number.isFinite(distance) || !Number.isFinite(fare) || !Number.isFinite(payout)) return null
+
+  return {
+    distanceMeters: distance,
+    fare,
+    fareText: typeof quote.fareText === 'string' ? quote.fareText : formatRupiah(fare),
+    driverPayout: payout,
+    driverPayoutText: typeof quote.driverPayoutText === 'string' ? quote.driverPayoutText : formatRupiah(payout),
+    companyFee: Number(quote.companyFee) || 0,
+    balances: {
+      cash: Number(quote.balances && quote.balances.cash) || 0,
+      bank: Number(quote.balances && quote.balances.bank) || 0,
+    }
+  }
+}
+
 function App() {
   const [ride, setRide] = React.useState(cachedRide)
   const [preview, setPreview] = React.useState(null)
@@ -116,14 +142,21 @@ function App() {
           return
         }
 
-        const data = response.data
-        if (!data.success) {
+        const envelope = response.data
+        if (!envelope.success) {
           setPreview(null)
-          setError(REASON_MESSAGES[data.reason] || 'Tidak bisa membaca tujuan.')
+          setError(REASON_MESSAGES[envelope.reason] || 'Tidak bisa membaca tujuan.')
           return
         }
 
-        setPreview(data)
+        const quote = normalizeQuote(envelope.data)
+        if (!quote) {
+          setPreview(null)
+          setError(REASON_MESSAGES.callback_failed)
+          return
+        }
+
+        setPreview(quote)
         setError('')
       })
       .catch(() => setError(REASON_MESSAGES.callback_failed))

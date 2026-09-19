@@ -41,6 +41,16 @@ File: `dist/html/assets/index-ebf41f23.js`
 An app with `isDisabled` is skipped by both the home grid and the router, so a
 disabled built-in is genuinely unlaunchable rather than CSS-hidden.
 
+## Second patch — goBack fallback (phone Back button)
+
+Recorded in [`goBack-fallback.patch`](goBack-fallback.patch): the phone's top
+back arrow, the Backspace handler and every app's header back button all call
+the hash history's `goBack`, which upstream implements as a bare
+`history.go(-1)` with no fallback — it does nothing when the router has no
+previous in-app entry. The patch adds a depth guard: previous entry exists →
+`go(-1)`; at the session's first entry but not `/` → go home (`#/`); already at
+home → no-op. One function, every app fixed.
+
 ## Re-applying after an NPWD update
 
 1. Replace `[npwd]/npwd` with the new upstream release.

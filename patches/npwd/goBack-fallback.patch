@@ -1,0 +1,61 @@
+# Unified diff of our NPWD patch vs shipped upstream 3.15.1-beta.2.
+#
+# File: dist/html/assets/__federation_shared_react-router-dom-770100b8.js
+# (federation chunk carrying react-router-dom 5.x and its history package,
+# minified single line). Verified against the installed bundle before applying.
+#
+# PURPOSE — global phone Back-button fix (Defect 3, "back arrow does nothing"):
+#
+# NPWD renders the whole phone inside <HashRouter> (index bundle:
+# `HashRouter:Z1e}=await C("react-router-dom")`), whose history is the hash
+# history in this chunk: class pt -> history=It(e.props). Its goBack is
+#
+#     function R(d){t.go(d)}function k(){R(-1)}
+#
+# with t = window.history. There is NO fallback: history.go(-1) with no usable
+# previous entry does nothing, so the phone's top back arrow (U_e: t=()=>{e.goBack()}),
+# the Backspace handler (V0e: ...||e.goBack()) and every per-app header's
+# goBack() all dead-end whenever the router has no previous in-app entry.
+# (Upstream Navigation.tsx `handleGoBackInHistory() { history.goBack() }` is the
+# unminified form of exactly this.)
+#
+# The hash history maintains an internal per-history keys array `A` (entries
+# pushed/updated in push w()/replace T()); `F.location` is the current entry,
+# so `A.indexOf(F.location.key)` is the CURRENT DEPTH within this phone
+# session. That gives a deterministic, timer-free fallback:
+#
+#   depth > 0            -> go(-1)  (a real previous in-app entry exists,
+#                                    because every in-app push created one)
+#   depth == 0, not "/"" -> go home  (hash becomes #/, landing on the app grid)
+#   depth == 0, at "/"   -> no-op    (already home; no loop)
+#
+# This fixes EVERY app (Ojol customer/driver, App Store, all built-ins) because
+# all goBack call sites converge on this single function. The grid button
+# (n=()=>{a||e.push("/")}) and the center close-phone button (closePhone) are
+# untouched.
+
+@@ fragment 1: hash-history goBack gains the depth guard/home fallback @@
+-function R(d){t.go(d)}function k(){R(-1)}
++function R(d){t.go(d)}function k(){var npwdIxA=A.indexOf(F.location.key);npwdIxA>0?R(-1):npwdIxA===0&&F.location.pathname!=="/"&&(window.location.hash="#/")}
+
+# Notes:
+# - `npwdIxA` is deliberately ugly to stay collision-free in the minified scope.
+# - Only the hash history is patched; the memory history (goBack:L ->
+#   function L(){P(-1)}) is left as shipped because nothing in NPWD or the
+#   external apps renders a <MemoryRouter> (grep: MemoryRouter appears only in
+#   this chunk's export list).
+# - window.location.hash="#/" reuses the SAME hash machinery the router already
+#   listens to (hashchange), so no extra event wiring is introduced.
+
+## Re-applying after an NPWD update
+#
+# 1. In the new federation chunk (name may change), locate the hash history:
+#    grep -oE 'goBack:[A-Za-z0-9_$]+,goForward' <chunk>.js
+#    then find that identifier's definition: function <id>(){<goId>(-1)}
+# 2. Apply the same transformation: before history.go(-1), read the current
+#    entry's index in the history's internal keys array (the variable captured
+#    by push/replace, exposed in the returned history object); > 0 -> go(-1),
+#    == 0 and location.pathname !== "/" -> set window.location.hash = "#/".
+# 3. Restart npwd. Test matrix: back from an app root -> home; back from a
+#    nested screen -> previous screen; repeated back at home -> no freeze,
+#    no loop; grid + close buttons unchanged.
