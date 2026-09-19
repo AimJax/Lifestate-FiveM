@@ -7,9 +7,11 @@ return {
     },
 
     -- Fare constants. Integer Rupiah only; the customer never supplies a fare.
-    baseFare = 7000,          -- Rp7.000 base fare
-    perKilometer = 2500,      -- Rp2.500 per kilometer
-    minimumFare = 10000,      -- Rp10.000 minimum fare
+    -- GTA map distances are compressed vs real-world trips, so pricing is set
+    -- for map scale: fare = max(20000, 12000 + 8000 * distanceKm).
+    baseFare = 12000,         -- Rp12.000 base fare
+    perKilometer = 8000,      -- Rp8.000 per kilometer
+    minimumFare = 20000,      -- Rp20.000 minimum fare
     platformFeePercent = 10,  -- company keeps 10% of every fare
 
     -- Route distance modelling.
