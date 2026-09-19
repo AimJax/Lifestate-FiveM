@@ -11,6 +11,7 @@ require 'tests.accept_cas_spec'
 require 'tests.roadsnap_spec'
 require 'tests.jobsprovider_spec'
 require 'tests.driver_hydration_spec'
+require 'tests.schema_migration_spec'
 -- The specs below stub host modules (MariaDB access, the driver registry, NPWD's
 -- config file) and must therefore load last: package.preload wins over the real
 -- file, so anything running after them would get the stub instead of production.

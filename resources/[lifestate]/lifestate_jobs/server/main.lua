@@ -10,6 +10,7 @@ local service = require 'server.service'
 local frameworkJobs = require 'server.frameworkjobs'
 local providerapi = require 'server.providerapi'
 local config = require 'config.server'
+local legacyOjol = require 'server.legacyojol'
 
 -- Provider API ----------------------------------------------------------------
 -- What a future job needs to appear in the admin menu: one registration call.
@@ -99,6 +100,7 @@ end)
 -- the Ojol provider; qbx_core stopping removes the framework jobs, which the
 -- adapter repopulates on its next start/sync).
 providerapi.Start()
+legacyOjol.Start()
 
 AddEventHandler('onServerResourceStart', function(resourceName)
     if resourceName ~= GetCurrentResourceName() then return end

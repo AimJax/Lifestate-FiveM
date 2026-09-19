@@ -31,7 +31,7 @@ package.preload['config.server'] = function()
         perm = 'admin',
         requireOptin = true,
         defaultJob = 'unemployed',
-        frameworkJobs = { enabled = true, blacklist = {}, whitelist = nil },
+        frameworkJobs = { enabled = true, blacklist = { ojol = true }, whitelist = nil },
         showCitizenId = false,
         listUnregisteredProfessions = true,
         categoryThreshold = 25,
@@ -107,10 +107,15 @@ local frameworkJobs = require 'server.frameworkjobs'
 local function reset()
     registry.Reset()
 
+    local config = require 'config.server'
+    config.frameworkJobs.blacklist = { ojol = true }
+    config.frameworkJobs.whitelist = nil
+
     host.jobs = {
         unemployed = job('Civilian'),
         police = job('LSPD', { [0] = 'Recruit', [2] = 'Sergeant' }),
         mechanic = job('Mechanic'),
+        ojol = job('Legacy Ojol'),
     }
 
     host.qbxState = 'started'
@@ -148,6 +153,7 @@ h.test('every Qbox job becomes one provider, excluding the default job', functio
 
     h.eq(registry.Count(), 2, 'police and mechanic, not unemployed')
     h.eq(provider('unemployed'), nil, 'the default job is never offered')
+    h.eq(provider('ojol'), nil, 'legacy qbx:ojol is never offered')
 
     local police = provider('police')
     h.ok(police, 'police registered')

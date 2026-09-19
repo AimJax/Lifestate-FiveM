@@ -11,5 +11,6 @@ require 'tests.service_spec'
 require 'tests.provider_ownership_spec'
 require 'tests.frameworkjobs_spec'
 require 'tests.external_dispatch_spec'
+require 'tests.legacyojol_spec'
 
 h.finish()

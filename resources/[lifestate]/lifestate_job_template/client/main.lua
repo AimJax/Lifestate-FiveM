@@ -1,0 +1,1 @@
+-- Add profession-specific client gameplay here. Registration remains server-authoritative.

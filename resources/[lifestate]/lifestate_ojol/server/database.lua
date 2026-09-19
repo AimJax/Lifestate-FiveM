@@ -126,13 +126,27 @@ function M.EnsureSchema()
         ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
     ]])
 
-    -- Migrations. Idempotent by construction:
-    --  - MODIFY to the same type is a no-op, so the signed-balance migration can
-    --    run on every start (the company may go negative from compensation).
-    --  - ADD COLUMN failures (duplicate column) are swallowed. Column existence
-    --    is verified with a cheap information_schema lookup instead of guessing.
-    MySQL.query.await([[ALTER TABLE `ojol_company`
-        MODIFY `company_balance` BIGINT NOT NULL DEFAULT 0]])
+    -- The company balance must be signed because compensation may make it negative.
+    -- Avoid an expensive table rebuild/metadata lock when the live schema is already current.
+    local balanceColumn = MySQL.single.await([[
+        SELECT DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ojol_company'
+          AND COLUMN_NAME = 'company_balance'
+    ]])
+    local balanceType = balanceColumn and tostring(balanceColumn.COLUMN_TYPE or ''):lower() or ''
+    local balanceCurrent = balanceColumn
+        and tostring(balanceColumn.DATA_TYPE or ''):lower() == 'bigint'
+        and not balanceType:find('unsigned', 1, true)
+        and balanceColumn.IS_NULLABLE == 'NO'
+        and tostring(balanceColumn.COLUMN_DEFAULT) == '0'
+
+    if not balanceCurrent then
+        MySQL.query.await([[ALTER TABLE `ojol_company`
+            MODIFY `company_balance` BIGINT NOT NULL DEFAULT 0]])
+    end
+
+    -- ADD COLUMN migrations use one cheap existence lookup each and only alter old schemas.
 
     local function addColumnIfMissing(table_, column, definition)
         local existing = MySQL.scalar.await(

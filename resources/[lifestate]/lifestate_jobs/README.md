@@ -1,5 +1,18 @@
 # lifestate_jobs
 
+## Retiring the legacy Qbox Ojol job
+
+Ojol is an independent profession, not a Qbox primary job. The framework adapter permanently blacklists `ojol`, while the independent provider id `ojol` remains available.
+
+Identify affected characters without changing them:
+
+```sql
+SELECT citizenid, name FROM players
+WHERE JSON_UNQUOTE(JSON_EXTRACT(job, '$.name')) = 'ojol';
+```
+
+Migrate one reviewed character with `/migratelegacyojol <citizenid>`. The admin-only command uses Qbox's supported `RemovePlayerFromJob(citizenid, 'ojol')` API for online or offline characters. It acts only when the current primary job is exactly `ojol`; Qbox resets it to `unemployed` grade 0 and preserves unrelated player data. Re-running it safely refuses. No automatic mass migration runs.
+
 Generic **Job Management** for the Qbox admin menu. One registry, one service game
 menu, N jobs — the admin menu never grows a per-job code path, so hundreds of jobs
 and professions stay navigable without touching this resource again.

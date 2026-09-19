@@ -27,6 +27,7 @@ resources/*
 resources/\[lifestate\]/*
 !resources/\[lifestate\]/lifestate_ojol/
 !resources/\[lifestate\]/lifestate_jobs/
+!resources/\[lifestate\]/lifestate_job_template/
 !resources/\[lifestate\]/lifestate_pcx160/
 resources/\[npwd-apps\]/*
 !resources/\[npwd-apps\]/npwd_lifestate_ojol/
