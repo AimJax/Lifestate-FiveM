@@ -42,41 +42,42 @@ function AppIcon({ id, size }) {
 
 const accentFor = (entry) => accents[entry.id] || DEFAULT_ACCENT
 
-function StateDot({ entry }) {
-  if (!entry.eligible) {
-    return <div style={{ ...styles.tileDot, ...styles.tileDotLocked }}>!</div>
-  }
-
-  if (entry.installed) {
-    return <div style={{ ...styles.tileDot, ...styles.tileDotInstalled }} />
-  }
-
-  return null
+function statusOf(entry) {
+  if (!entry.eligible) return { text: 'TIDAK TERSEDIA', color: '#F59E0B' }
+  if (entry.installed) return { text: 'TERPASANG', color: '#22C55E' }
+  return { text: 'BELUM TERPASANG', color: '#6F7885' }
 }
 
-function Grid({ apps, onOpen }) {
+function AppList({ apps, onOpen }) {
   return (
-    <div style={styles.grid}>
-      {apps.map((entry) => (
-        <button
-          key={entry.id}
-          type="button"
-          style={styles.tile}
-          onClick={() => onOpen(entry.id)}
-        >
-          <div
-            style={{
-              ...styles.tileIcon,
-              background: accentFor(entry),
-              opacity: entry.eligible ? 1 : 0.45
-            }}
+    <div style={styles.list}>
+      {apps.map((entry) => {
+        const status = statusOf(entry)
+        return (
+          <button
+            key={entry.id}
+            type="button"
+            style={styles.row}
+            onClick={() => onOpen(entry.id)}
           >
-            <AppIcon id={entry.id} size={30} />
-          </div>
-          <div style={styles.tileName}>{entry.name}</div>
-          <StateDot entry={entry} />
-        </button>
-      ))}
+            <div
+              style={{
+                ...styles.rowIcon,
+                background: accentFor(entry),
+                opacity: entry.eligible ? 1 : 0.45
+              }}
+            >
+              <AppIcon id={entry.id} size={30} />
+            </div>
+            <div style={styles.rowText}>
+              <div style={styles.rowName}>{entry.name}</div>
+              <div style={styles.rowDesc}>{entry.description}</div>
+              <div style={{ ...styles.rowStatus, color: status.color }}>{status.text}</div>
+            </div>
+            <div style={styles.chevron}>&#8250;</div>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -233,7 +234,7 @@ function App() {
           <div style={styles.hint}>Belum ada aplikasi yang tersedia.</div>
         )}
 
-        {apps && !selectedEntry && <Grid apps={apps} onOpen={setSelected} />}
+        {apps && !selectedEntry && <AppList apps={apps} onOpen={setSelected} />}
 
         {apps && selectedEntry && (
           <Detail
@@ -306,68 +307,69 @@ const styles = {
     fontSize: '13px',
     marginBottom: '14px'
   },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '12px'
-  },
-  tile: {
-    position: 'relative',
+  list: {
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'column'
+  },
+  row: {
+    display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '14px 6px 12px',
-    minHeight: '118px',
+    gap: '14px',
+    width: '100%',
     boxSizing: 'border-box',
-    background: '#181C24',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#292F3A',
-    borderRadius: '14px',
+    padding: '13px 4px',
+    background: 'none',
+    border: 'none',
+    borderBottom: '1px solid #1E232D',
     cursor: 'pointer',
     color: '#ffffff',
-    font: 'inherit'
+    font: 'inherit',
+    textAlign: 'left'
   },
-  tileIcon: {
-    width: '56px',
-    height: '56px',
-    borderRadius: '16px',
+  rowIcon: {
+    width: '54px',
+    height: '54px',
+    flexShrink: 0,
+    borderRadius: '15px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     color: '#ffffff'
   },
-  tileName: {
-    fontSize: '12px',
-    fontWeight: '600',
-    lineHeight: '14px',
-    textAlign: 'center',
-    wordBreak: 'break-word'
+  rowText: {
+    flex: 1,
+    minWidth: 0
   },
-  tileDot: {
-    position: 'absolute',
-    top: '10px',
-    right: '10px',
-    width: '10px',
-    height: '10px',
-    borderRadius: '6px',
-    boxSizing: 'border-box'
-  },
-  tileDotInstalled: {
-    background: '#22c55e',
-    border: '2px solid #12151C'
-  },
-  tileDotLocked: {
-    background: '#1E232D',
-    border: '1px solid #f59e0b',
-    color: '#f59e0b',
-    fontSize: '9px',
-    lineHeight: '10px',
+  rowName: {
+    fontSize: '14px',
     fontWeight: '700',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
+    lineHeight: '18px',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  rowDesc: {
+    color: '#9AA3AF',
+    fontSize: '11.5px',
+    lineHeight: '16px',
+    marginTop: '2px',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden'
+  },
+  rowStatus: {
+    fontSize: '10px',
+    fontWeight: '700',
+    letterSpacing: '1px',
+    marginTop: '4px'
+  },
+  chevron: {
+    flexShrink: 0,
+    color: '#6F7885',
+    fontSize: '22px',
+    lineHeight: '1',
+    paddingLeft: '4px'
   },
   back: {
     background: 'none',

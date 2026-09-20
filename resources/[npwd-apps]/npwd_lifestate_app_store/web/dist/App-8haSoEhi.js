@@ -130,40 +130,43 @@ function AppIcon({ id, size }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { width: size, height: size });
 }
 const accentFor = (entry) => accents[entry.id] || DEFAULT_ACCENT;
-function StateDot({ entry }) {
-  if (!entry.eligible) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { ...styles.tileDot, ...styles.tileDotLocked }, children: "!" });
-  }
-  if (entry.installed) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { ...styles.tileDot, ...styles.tileDotInstalled } });
-  }
-  return null;
+function statusOf(entry) {
+  if (!entry.eligible) return { text: "TIDAK TERSEDIA", color: "#F59E0B" };
+  if (entry.installed) return { text: "TERPASANG", color: "#22C55E" };
+  return { text: "BELUM TERPASANG", color: "#6F7885" };
 }
-function Grid({ apps, onOpen }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.grid, children: apps.map((entry) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "button",
-    {
-      type: "button",
-      style: styles.tile,
-      onClick: () => onOpen(entry.id),
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            style: {
-              ...styles.tileIcon,
-              background: accentFor(entry),
-              opacity: entry.eligible ? 1 : 0.45
-            },
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx(AppIcon, { id: entry.id, size: 30 })
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.tileName, children: entry.name }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(StateDot, { entry })
-      ]
-    },
-    entry.id
-  )) });
+function AppList({ apps, onOpen }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.list, children: apps.map((entry) => {
+    const status = statusOf(entry);
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        type: "button",
+        style: styles.row,
+        onClick: () => onOpen(entry.id),
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                ...styles.rowIcon,
+                background: accentFor(entry),
+                opacity: entry.eligible ? 1 : 0.45
+              },
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(AppIcon, { id: entry.id, size: 30 })
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.rowText, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.rowName, children: entry.name }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.rowDesc, children: entry.description }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { ...styles.rowStatus, color: status.color }, children: status.text })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.chevron, children: "›" })
+        ]
+      },
+      entry.id
+    );
+  }) });
 }
 function Detail({ entry, busy, onBack, onInstall, onUninstall }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -266,7 +269,7 @@ function App() {
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { style: { ...styles.button, ...styles.installButton }, onClick: load, children: "COBA LAGI" })
     ] }),
     apps && apps.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.hint, children: "Belum ada aplikasi yang tersedia." }),
-    apps && !selectedEntry && /* @__PURE__ */ jsxRuntimeExports.jsx(Grid, { apps, onOpen: setSelected }),
+    apps && !selectedEntry && /* @__PURE__ */ jsxRuntimeExports.jsx(AppList, { apps, onOpen: setSelected }),
     apps && selectedEntry && /* @__PURE__ */ jsxRuntimeExports.jsx(
       Detail,
       {
@@ -335,68 +338,69 @@ const styles = {
     fontSize: "13px",
     marginBottom: "14px"
   },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: "12px"
-  },
-  tile: {
-    position: "relative",
+  list: {
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "column"
+  },
+  row: {
+    display: "flex",
     alignItems: "center",
-    gap: "8px",
-    padding: "14px 6px 12px",
-    minHeight: "118px",
+    gap: "14px",
+    width: "100%",
     boxSizing: "border-box",
-    background: "#181C24",
-    borderWidth: "1px",
-    borderStyle: "solid",
-    borderColor: "#292F3A",
-    borderRadius: "14px",
+    padding: "13px 4px",
+    background: "none",
+    border: "none",
+    borderBottom: "1px solid #1E232D",
     cursor: "pointer",
     color: "#ffffff",
-    font: "inherit"
+    font: "inherit",
+    textAlign: "left"
   },
-  tileIcon: {
-    width: "56px",
-    height: "56px",
-    borderRadius: "16px",
+  rowIcon: {
+    width: "54px",
+    height: "54px",
+    flexShrink: 0,
+    borderRadius: "15px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     color: "#ffffff"
   },
-  tileName: {
-    fontSize: "12px",
-    fontWeight: "600",
-    lineHeight: "14px",
-    textAlign: "center",
-    wordBreak: "break-word"
+  rowText: {
+    flex: 1,
+    minWidth: 0
   },
-  tileDot: {
-    position: "absolute",
-    top: "10px",
-    right: "10px",
-    width: "10px",
-    height: "10px",
-    borderRadius: "6px",
-    boxSizing: "border-box"
-  },
-  tileDotInstalled: {
-    background: "#22c55e",
-    border: "2px solid #12151C"
-  },
-  tileDotLocked: {
-    background: "#1E232D",
-    border: "1px solid #f59e0b",
-    color: "#f59e0b",
-    fontSize: "9px",
-    lineHeight: "10px",
+  rowName: {
+    fontSize: "14px",
     fontWeight: "700",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center"
+    lineHeight: "18px",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis"
+  },
+  rowDesc: {
+    color: "#9AA3AF",
+    fontSize: "11.5px",
+    lineHeight: "16px",
+    marginTop: "2px",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden"
+  },
+  rowStatus: {
+    fontSize: "10px",
+    fontWeight: "700",
+    letterSpacing: "1px",
+    marginTop: "4px"
+  },
+  chevron: {
+    flexShrink: 0,
+    color: "#6F7885",
+    fontSize: "22px",
+    lineHeight: "1",
+    paddingLeft: "4px"
   },
   back: {
     background: "none",

@@ -1,5 +1,5 @@
 import { importShared } from "./__federation_fn_import-eda1j03z.js";
-import { A as App, j as jsxRuntimeExports } from "./App-CFJpm4B0.js";
+import { A as App, j as jsxRuntimeExports } from "./App-8haSoEhi.js";
 const React = await importShared("react");
 const path = "/npwd_lifestate_app_store";
 const STORE_CELL_A = { x: 4, y: 4 };
