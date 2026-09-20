@@ -227,7 +227,7 @@ index c2a1ec57..a78c10fc 100644
    box-sizing: border-box;
  }
 diff --git a/apps/phone/src/apps/home/components/Home.tsx b/apps/phone/src/apps/home/components/Home.tsx
-index 40d749e9..4e79ce22 100644
+index 40d749e9..404b1bd3 100644
 --- a/apps/phone/src/apps/home/components/Home.tsx
 +++ b/apps/phone/src/apps/home/components/Home.tsx
 @@ -1,33 +1,140 @@
@@ -283,8 +283,8 @@ index 40d749e9..4e79ce22 100644
 +  if (!env) return null;
 +
 +  return (
-+    <Box sx={{ padding: '6px 8px 0', textAlign: 'center' }}>
-+      <Box sx={{ color: '#FFFFFF', fontSize: '44px', fontWeight: 800, lineHeight: 1.1 }}>
++    <Box sx={{ padding: '6px 8px 0', marginTop: '40px', textAlign: 'center' }}>
++      <Box sx={{ color: '#F5F7FA', fontSize: '44px', fontWeight: 700, letterSpacing: '1px', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
 +        {pad2(env.hour)}:{pad2(env.minute)}
 +      </Box>
 +      <Box sx={{ color: '#9AA3AF', fontSize: '12px', fontWeight: 600, marginTop: '4px' }}>
@@ -389,6 +389,52 @@ index 40d749e9..4e79ce22 100644
      </AppWrapper>
    );
  };
+diff --git a/apps/phone/src/config/default.json b/apps/phone/src/config/default.json
+index 07639e94..ddaf9a40 100644
+--- a/apps/phone/src/config/default.json
++++ b/apps/phone/src/config/default.json
+@@ -3,28 +3,8 @@
+   "defaultLanguage": "en",
+   "wallpapers": [
+     {
+-      "label": "Minimal",
+-      "value": "minimal.jpg"
+-    },
+-    {
+-      "label": "Surf",
+-      "value": "surf.jpg"
+-    },
+-    {
+-      "label": "Waves",
+-      "value": "waves.jpg"
+-    },
+-    {
+-      "label": "Project Error",
+-      "value": "projecterror.jpg"
+-    },
+-    {
+-      "label": "NPWD 2020",
+-      "value": "npwd2020.png"
+-    },
+-    {
+-      "label": "Default",
+-      "value": "default.jpg"
++      "label": "LS One",
++      "value": "lsone.png"
+     }
+   ],
+   "frames": [
+@@ -217,8 +197,8 @@
+       }
+     },
+     "wallpaper": {
+-      "label": "Minimal",
+-      "value": "minimal.jpg"
++      "label": "LS One",
++      "value": "lsone.png"
+     },
+     "customWallpaper": "",
+     "frame": {
 diff --git a/apps/phone/src/os/apps/config/apps.tsx b/apps/phone/src/os/apps/config/apps.tsx
 index e8bb1a7a..7df228bc 100644
 --- a/apps/phone/src/os/apps/config/apps.tsx

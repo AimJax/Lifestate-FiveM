@@ -117,7 +117,17 @@ try {
 $BuildHtml = Join-Path $WorkDir 'dist\html'
 if (-not (Test-Path -LiteralPath (Join-Path $BuildHtml 'index.html'))) { Fail 'build output missing dist/html' }
 
-# 4. Production bundle patches -------------------------------------------------
+# 4. LS One binary assets ------------------------------------------------------
+# Tracked binaries (patches/npwd/ls-one/assets/) are copied into the vendor
+# tree BEFORE the build so they ship inside dist (a unified diff cannot carry
+# binary files).
+$lsOneAssets = Join-Path $PatchDir 'assets'
+if (Test-Path -LiteralPath $lsOneAssets) {
+  Copy-Item -LiteralPath (Join-Path $lsOneAssets '*') -Destination (Join-Path $WorkDir 'apps\phone\public\media\backgrounds') -Force
+  Step 'LS One assets staged into vendor tree'
+}
+
+# 5. Production bundle patches -------------------------------------------------
 function Assert-Replace($file, $old, $new, $label) {
   $t = Get-Content -LiteralPath $file -Raw
   $n = ([regex]::Matches($t, [regex]::Escape($old))).Count
@@ -151,7 +161,7 @@ foreach ($f in @($indexBundle, (Join-Path $BuildHtml 'assets\__federation_fn_imp
 }
 Step 'goBack chunk renamed + references updated'
 
-# 5. Deploy --------------------------------------------------------------------
+# 6. Deploy --------------------------------------------------------------------
 Step "deploying to $LiveHtml"
 foreach ($name in @('assets', 'media', 'index.html', 'iframe.webcomp.js')) {
   $dst = Join-Path $LiveHtml $name
@@ -168,7 +178,7 @@ $gameClient = Join-Path $WorkDir 'dist\game\client\client.js'
 $liveGameClient = Join-Path $RepoRoot 'resources\[npwd]\npwd\dist\game\client\client.js'
 Copy-Item -LiteralPath $gameClient -Destination $liveGameClient -Force
 
-# 6. Verify ---------------------------------------------------------------------
+# 7. Verify ---------------------------------------------------------------------
 $css = Get-ChildItem -LiteralPath (Join-Path $LiveHtml 'assets') -Filter 'index-*.css' |
   Select-Object -First 1 -ExpandProperty FullName
 $cssText = Get-Content -LiteralPath $css -Raw

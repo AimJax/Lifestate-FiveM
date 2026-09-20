@@ -60,6 +60,8 @@ alternate locations (the override path is used as given):
    reuses it if it already holds the pinned commit),
 4. applies `ls-one-shell.patch` (aborts unless every file in the patch shows
    the change),
+5. stages tracked binary assets (`assets/` → vendor `public/media/`) — a
+   unified diff cannot carry binaries,
 5. `pnpm install` (approves only the postinstalls the build needs),
 6. builds `@npwd/keyos`, `@npwd/nui` (`vite build --mode game`) and the game
    bridge (`node ./scripts/build.js` in `apps/game`),
