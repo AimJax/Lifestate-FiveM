@@ -569,9 +569,18 @@ index 2e4cb99b..c9a05b1b 100644
  };
  
 diff --git a/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx b/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx
-index 5f62bbb4..dd9a5429 100644
+index 5f62bbb4..b062d7b1 100644
 --- a/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx
 +++ b/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx
+@@ -10,7 +10,7 @@ import { useMyPhoneNumber } from '@os/simcard/hooks/useMyPhoneNumber';
+ import { useDialHistory } from '../../hooks/useDialHistory';
+ import { useCall } from '@os/call/hooks/useCall';
+ import { useContacts } from '../../../contacts/hooks/state';
+-import { Phone, PhoneForwarded, PhoneIncoming, UserRoundPlus } from 'lucide-react';
++import { Phone, PhoneForwarded, PhoneIncoming, UserRoundPlus, History as HistoryIcon } from 'lucide-react';
+ 
+ export const DialerHistory: React.FC = () => {
+   const myNumber = useMyPhoneNumber();
 @@ -35,16 +35,37 @@ export const DialerHistory: React.FC = () => {
    if (!calls?.length) {
      return (
@@ -608,7 +617,7 @@ index 5f62bbb4..dd9a5429 100644
 +            color: '#6F7885',
 +          }}
 +        >
-+          <History size={28} />
++          <HistoryIcon size={28} />
 +        </Box>
 +        <Typography style={{ color: '#FFFFFF', fontSize: '16px', fontWeight: 700 }}>
 +          Belum ada riwayat

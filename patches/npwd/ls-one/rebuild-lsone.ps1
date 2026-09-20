@@ -88,6 +88,44 @@ $changedFiles = @(git -C $WorkDir status --short | ForEach-Object {
 $missing = @($patchedFiles | Where-Object { $changedFiles -notcontains $_ })
 if ($missing.Count -gt 0) { Fail ('patch applied but missing changes in: ' + ($missing -join ', ')) }
 
+# 2b. JSX reference audit --------------------------------------------------------
+# Catches the class of bug that shipped the bare <History> (DOM constructor)
+# crash: a Capitalized JSX tag with no matching import or local definition.
+# Vite/esbuild cannot catch it (no typecheck); CEF fails at render time.
+$jsxAuditFiles = @(
+  'apps/phone/src/apps/dialer/components/DialerApp.tsx',
+  'apps/phone/src/apps/dialer/components/DialerNavBar.tsx',
+  'apps/phone/src/apps/dialer/components/views/DialerHistory.tsx',
+  'apps/phone/src/apps/dialer/components/DialerInput.tsx',
+  'apps/phone/src/apps/dialer/components/DialPadGrid.tsx'
+)
+$jsxKnownGlobals = @('React', 'Box', 'Grid', 'Typography', 'Button', 'IconButton', 'Paper', 'Switch', 'Route', 'Link', 'NavLink', 'Suspense', 'Fragment')
+foreach ($rel in $jsxAuditFiles) {
+  $src = Get-Content -LiteralPath (Join-Path $WorkDir $rel) -Raw
+  $defined = New-Object System.Collections.Generic.HashSet[string]
+  foreach ($m in [regex]::Matches($src, '(?m)^import\s+(?:(\w+)\s*,?\s*)?(?:\{([^}]*)\})?')) {
+    if ($m.Groups[1].Success) { [void]$defined.Add($m.Groups[1].Value.Trim()) }
+    foreach ($n in $m.Groups[2].Value -split ',') {
+      $clean = ($n.Trim() -split '\s+as\s+')[-1].Trim()
+      if ($clean) { [void]$defined.Add($clean) }
+    }
+  }
+  foreach ($m in [regex]::Matches($src, '(?m)^(?:export\s+)?(?:const|function|class)\s+([A-Za-z0-9_]+)')) {
+    [void]$defined.Add($m.Groups[1].Value)
+  }
+  foreach ($g in $jsxKnownGlobals) { [void]$defined.Add($g) }
+  $bad = @()
+  # '<' must NOT follow an identifier char (excludes TS generics like
+  # MouseEventHandler<HTMLButtonElement>); real JSX tags follow whitespace
+  # or syntax characters.
+  foreach ($m in [regex]::Matches($src, '(?<![A-Za-z0-9_$.])<([A-Z][A-Za-z0-9]*)')) {
+    if (-not $defined.Contains($m.Groups[1].Value)) { $bad += $m.Groups[1].Value }
+  }
+  $bad = @($bad | Sort-Object -Unique)
+  if ($bad.Count -gt 0) { Fail ("JSX audit failed in ${rel}: unimported component(s): " + ($bad -join ', ')) }
+}
+Step 'JSX reference audit clean (no unimported components)'
+
 # 3. LS One binary assets -------------------------------------------------------
 # Tracked binaries (patches/npwd/ls-one/assets/) are copied into the vendor
 # tree BEFORE any build runs, so a clean build always ships them inside dist
@@ -147,7 +185,7 @@ $indexBundle = Get-ChildItem -LiteralPath (Join-Path $BuildHtml 'assets') -Filte
 if (-not $indexBundle) { Fail 'index bundle not found in fresh build' }
 
 Step 're-applying disabledApps bundle patch'
-Assert-Replace $indexBundle 'i=Hg().iconSet.value,t=g6(()=>Cle.map(s=>{' 'i=Hg().iconSet.value,npwdDis=We(xi.resourceConfig)?.disabledApps||[],t=g6(()=>Cle.map(s=>{' 'disabledApps/fragment-1'
+Assert-Replace $indexBundle 'i=Hg().iconSet.value,t=g6(()=>wle.map(s=>{' 'i=Hg().iconSet.value,npwdDis=We(xi.resourceConfig)?.disabledApps||[],t=g6(()=>wle.map(s=>{' 'disabledApps/fragment-1'
 Assert-Replace $indexBundle 'isDisabled:s.disable}:{' 'isDisabled:s.disable||npwdDis.includes(s.id)}:{' 'disabledApps/fragment-2'
 Assert-Replace $indexBundle 'isDisabled:s.disable}}),[e,i,a])' 'isDisabled:s.disable||npwdDis.includes(s.id)}}),[e,i,a,npwdDis])' 'disabledApps/fragment-3'
 
