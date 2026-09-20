@@ -65,12 +65,14 @@ if ((Test-Path -LiteralPath (Join-Path $WorkDir '.git')) -and
 
 # 2. LS One source patch ------------------------------------------------------
 Step 'applying LS One source patch'
-git -C $WorkDir checkout -- apps/phone/src/Phone.css apps/phone/src/apps/home/components/Home.tsx apps/phone/src/os/navigation-bar/components/Navigation.tsx apps/phone/src/os/new-notifications/components/NotificationBar.tsx pnpm-workspace.yaml 2>&1 | Out-Null
+git -C $WorkDir checkout -- apps/phone/src pnpm-workspace.yaml 2>&1 | Out-Null
 git -C $WorkDir apply --check $SourcePatch 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail 'ls-one-shell.patch does not apply cleanly (see patches/npwd/ls-one/README.md)' }
 git -C $WorkDir apply $SourcePatch 2>&1 | Out-Null
-$changed = @(git -C $WorkDir status --short | Where-Object { $_ -match '^ M' }).Count
-if ($changed -ne 4) { Fail "expected exactly 4 modified files, got $changed" }
+$patchedFiles = @(Select-String -LiteralPath $SourcePatch -Pattern '^diff --git a/(.+) b/' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
+$changedFiles = @(git -C $WorkDir status --short | Where-Object { $_ -match '^ M' } | ForEach-Object { $_.Substring(3).Trim() } | Sort-Object -Unique)
+$missing = @($patchedFiles | Where-Object { $changedFiles -notcontains $_ })
+if ($missing.Count -gt 0) { Fail ('patch applied but missing changes in: ' + ($missing -join ', ')) }
 
 # 3. Dependencies + build ------------------------------------------------------
 Push-Location -LiteralPath $WorkDir
@@ -107,7 +109,7 @@ $indexBundle = Get-ChildItem -LiteralPath (Join-Path $BuildHtml 'assets') -Filte
 if (-not $indexBundle) { Fail 'index bundle not found in fresh build' }
 
 Step 're-applying disabledApps bundle patch'
-Assert-Replace $indexBundle 'i=Vg().iconSet.value,t=p6(()=>Ile.map(s=>{' 'i=Vg().iconSet.value,npwdDis=Ve(wi.resourceConfig)?.disabledApps||[],t=p6(()=>Ile.map(s=>{' 'disabledApps/fragment-1'
+Assert-Replace $indexBundle 'i=Hg().iconSet.value,t=g6(()=>Ale.map(s=>{' 'i=Hg().iconSet.value,npwdDis=Ve(xi.resourceConfig)?.disabledApps||[],t=g6(()=>Ale.map(s=>{' 'disabledApps/fragment-1'
 Assert-Replace $indexBundle 'isDisabled:s.disable}:{' 'isDisabled:s.disable||npwdDis.includes(s.id)}:{' 'disabledApps/fragment-2'
 Assert-Replace $indexBundle 'isDisabled:s.disable}}),[e,i,a])' 'isDisabled:s.disable||npwdDis.includes(s.id)}}),[e,i,a,npwdDis])' 'disabledApps/fragment-3'
 
@@ -146,15 +148,14 @@ $jsText = Get-Content -LiteralPath $indexBundle -Raw
 $mainJs = Get-ChildItem -LiteralPath (Join-Path $LiveHtml 'assets') -Filter 'index-*.js' |
   Select-Object -First 1 -ExpandProperty FullName
 $mainText = Get-Content -LiteralPath $mainJs -Raw
-$checks = @{
-  'LS One frame CSS'      = $cssText.Contains('PhoneFrame:before');
-  'LS One gesture pill'   = $mainText.Contains('bg-white/85');
-  'disabledApps patch'    = $jsText.Contains('npwdDis=Ve(wi.resourceConfig)');
-  'goBack backfix chunk'  = Test-Path -LiteralPath (Join-Path $LiveHtml "assets\$backfixName");
-}
-$stale = Get-ChildItem -LiteralPath $LiveHtml -Recurse -File |
+$failedChecks = New-Object System.Collections.Generic.List[string]
+if (-not $cssText.Contains('PhoneFrame:before')) { $failedChecks.Add('LS One frame CSS') }
+if (-not $mainText.Contains('bg-white/85')) { $failedChecks.Add('LS One gesture pill') }
+if (-not ($jsText.Contains('npwdDis=') -and $jsText.Contains('disabledApps||'))) { $failedChecks.Add('disabledApps patch') }
+if (-not (Test-Path -LiteralPath (Join-Path $LiveHtml "assets\$backfixName"))) { $failedChecks.Add('goBack backfix chunk') }
+$staleRef = Get-ChildItem -LiteralPath $LiveHtml -Recurse -File |
   Select-String -Pattern 'react-router-dom-770100b8' | Select-Object -First 1
-$failed = @($checks.GetEnumerator() | Where-Object { -not $_.Value }) + @($stale | ForEach-Object { "stale router ref: $($_.Path)" })
-if ($failed.Count -gt 0) { Fail ("verification failed: " + ($failed -join '; ')) }
+if ($staleRef) { $failedChecks.Add(('stale router ref: ' + $staleRef.Path)) }
+if ($failedChecks.Count -gt 0) { Fail ('verification failed: ' + ($failedChecks -join '; ')) }
 
 Step 'LS One rebuild + deploy verified. Restart npwd and check live.'

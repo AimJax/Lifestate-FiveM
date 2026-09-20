@@ -58,7 +58,8 @@ alternate locations (the override path is used as given):
 3. clones the pinned baseline into the work dir (default
    `D:\Build\NPWD\npwd-src`, override with `-WorkDir`;
    reuses it if it already holds the pinned commit),
-4. applies `ls-one-shell.patch` (aborts unless exactly 4 files change),
+4. applies `ls-one-shell.patch` (aborts unless every file in the patch shows
+   the change),
 5. `pnpm install` (approves only the postinstalls the build needs),
 6. builds `@npwd/keyos` then `@npwd/nui` (`vite build --mode game`),
 7. re-applies the production bundle patches onto the fresh build and
