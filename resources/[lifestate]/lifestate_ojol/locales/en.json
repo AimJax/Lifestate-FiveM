@@ -3,14 +3,14 @@
         "one_bus_active": "Kamu hanya bisa memakai satu motor kerja",
         "exploit_attempt": "Percobaan Exploit",
         "failed_to_spawn": "Gagal mengeluarkan motor",
-        "not_registered": "Kamu belum terdaftar sebagai driver Ojol",
-        "not_online": "Kamu belum online. Check-in melalui aplikasi Ojol terlebih dahulu"
+        "not_registered": "Kamu belum terdaftar sebagai Mitra LAJU",
+        "not_online": "Kamu belum online. Check-in melalui LAJU Mitra terlebih dahulu"
     },
     "info": {
-        "bus": "Motor Ojek",
-        "bus_plate": "OJOL",
-        "bus_depot": "Pangkalan Ojek",
+        "bus": "Motor LAJU",
+        "bus_plate": "LAJU",
+        "bus_depot": "Pangkalan LAJU",
         "bus_header": "Pilihan Motor",
-        "bus_job": "Ojek Online"
+        "bus_job": "LAJU"
     }
 }

@@ -69,7 +69,7 @@ lib.callback.register('lifestate_ojol:server:getDriverState', function(source)
     return drivers.GetDriverStateSnapshot(citizenid)
 end)
 
----Clock in / out (MULAI NGE-OJOL / SELESAI NGE-OJOL).
+---Clock in / out (MULAI NARIK / SELESAI NARIK).
 ---Clock-out while busy stays allowed here for now; the future ride system will
 ---forbid it at this boundary once ride state exists.
 lib.callback.register('lifestate_ojol:server:setDriverDuty', function(source, desiredState)
@@ -98,7 +98,7 @@ lib.callback.register('lifestate_ojol:server:setDriverDuty', function(source, de
     return snapshot
 end)
 
----Bike spawn (Pangkalan Ojek). Requires registered + active + online.
+---Bike spawn (Pangkalan LAJU). Requires registered + active + online.
 ---The Qbox primary job is NOT used as authorization anymore.
 ---Duplicate protection is server-authoritative AND serialized: the whole
 ---critical section runs under a per-driver spawn lock, so even two requests in
@@ -439,19 +439,17 @@ local function notify(src, message, notifyType)
     exports.qbx_core:Notify(src, message, notifyType)
 end
 
-lib.addCommand('daftarojol', {
-    help = 'CEO: daftarkan driver Ojol yang berada di dekatmu',
-    params = {
-        { name = 'serverId', help = 'Server ID target', type = 'playerId' },
-    },
-}, function(source, args)
+---Shared handler for /daftarlaju and its backward-compatible alias.
+---@param source number
+---@param args table
+local function registerDriverCommand(source, args)
     local src = source
     if src == 0 then return end -- console has no CEO record
     if isManagerActionSpammy(src) then return end
 
     local callerCitizenid = drivers.ResolveCitizenid(src)
     if not callerCitizenid or not drivers.IsActingCEO(callerCitizenid) then
-        notify(src, 'Kamu bukan CEO Ojol.', 'error')
+        notify(src, 'Kamu bukan CEO LAJU.', 'error')
         return
     end
 
@@ -480,7 +478,7 @@ lib.addCommand('daftarojol', {
     local ok, reason = drivers.RegisterDriver(targetCitizenid, callerCitizenid)
     if not ok then
         local messages = {
-            already_registered = 'Player ini sudah terdaftar sebagai driver Ojol.',
+            already_registered = 'Player ini sudah terdaftar sebagai Mitra LAJU.',
             invalid_target = 'Target tidak valid.',
             database_error = 'Gagal menyimpan data driver.',
         }
@@ -490,29 +488,42 @@ lib.addCommand('daftarojol', {
 
     -- 'reactivated' = an inactive historical record was reused (stats preserved).
     notify(src, reason == 'reactivated'
-        and 'Driver Ojol diaktifkan kembali (riwayat tetap tersimpan).'
-        or 'Driver Ojol berhasil didaftarkan.', 'success')
-    notify(targetSrc, 'Kamu sekarang terdaftar sebagai driver Ojol. Buka aplikasi Ojol di HP untuk clock in.', 'success')
+        and 'Mitra LAJU diaktifkan kembali (riwayat tetap tersimpan).'
+        or 'Mitra LAJU berhasil didaftarkan.', 'success')
+    notify(targetSrc, 'Kamu sekarang terdaftar sebagai Mitra LAJU. Buka aplikasi LAJU Mitra di HP untuk clock in.', 'success')
 
     -- Push the fresh state so an already-online hiree unlocks the dispatcher
     -- without reconnecting (fire/rehire uses the same persistent identity).
     TriggerClientEvent('lifestate_ojol:client:driverStateChanged', targetSrc,
         drivers.GetDriverStateSnapshot(targetCitizenid))
-end)
+end
 
-lib.addCommand('pecatojol', {
-    help = 'CEO: pecat driver Ojol yang berada di dekatmu',
+lib.addCommand('daftarlaju', {
+    help = 'CEO LAJU: daftarkan Mitra LAJU yang berada di dekatmu',
     params = {
         { name = 'serverId', help = 'Server ID target', type = 'playerId' },
     },
-}, function(source, args)
+}, registerDriverCommand)
+
+-- Backward-compatible alias: the exact same handler as /daftarlaju.
+lib.addCommand('daftarojol', {
+    help = 'Alias of /daftarlaju',
+    params = {
+        { name = 'serverId', help = 'Server ID target', type = 'playerId' },
+    },
+}, registerDriverCommand)
+
+---Shared handler for /pecatlaju and its backward-compatible alias.
+---@param source number
+---@param args table
+local function fireDriverCommand(source, args)
     local src = source
     if src == 0 then return end
     if isManagerActionSpammy(src) then return end
 
     local callerCitizenid = drivers.ResolveCitizenid(src)
     if not callerCitizenid or not drivers.IsActingCEO(callerCitizenid) then
-        notify(src, 'Kamu bukan CEO Ojol.', 'error')
+        notify(src, 'Kamu bukan CEO LAJU.', 'error')
         return
     end
 
@@ -542,7 +553,7 @@ lib.addCommand('pecatojol', {
     local ok, reason = drivers.FireDriver(targetCitizenid)
     if not ok then
         local messages = {
-            not_registered = 'Player ini bukan driver Ojol terdaftar.',
+            not_registered = 'Player ini bukan Mitra LAJU terdaftar.',
             cannot_fire_ceo = 'Kamu tidak bisa memecat CEO.',
             database_error = 'Gagal menghapus data driver.',
         }
@@ -550,12 +561,27 @@ lib.addCommand('pecatojol', {
         return
     end
 
-    notify(src, 'Driver Ojol berhasil dipecat.', 'success')
-    notify(targetSrc, 'Kamu telah dipecat dari Ojol.', 'error')
-end)
+    notify(src, 'Mitra LAJU berhasil dipecat.', 'success')
+    notify(targetSrc, 'Kamu telah dipecat dari LAJU.', 'error')
+end
+
+lib.addCommand('pecatlaju', {
+    help = 'CEO LAJU: pecat Mitra LAJU yang berada di dekatmu',
+    params = {
+        { name = 'serverId', help = 'Server ID target', type = 'playerId' },
+    },
+}, fireDriverCommand)
+
+-- Backward-compatible alias: the exact same handler as /pecatlaju.
+lib.addCommand('pecatojol', {
+    help = 'Alias of /pecatlaju',
+    params = {
+        { name = 'serverId', help = 'Server ID target', type = 'playerId' },
+    },
+}, fireDriverCommand)
 
 lib.addCommand('promoteojol', {
-    help = 'CEO: naikkan rank driver Ojol (driver -> senior_driver -> supervisor)',
+    help = 'CEO LAJU: naikkan rank Mitra LAJU (driver -> senior_driver -> supervisor)',
     params = {
         { name = 'serverId', help = 'Server ID target', type = 'playerId' },
     },
@@ -566,7 +592,7 @@ lib.addCommand('promoteojol', {
 
     local callerCitizenid = drivers.ResolveCitizenid(src)
     if not callerCitizenid or not drivers.IsActingCEO(callerCitizenid) then
-        notify(src, 'Kamu bukan CEO Ojol.', 'error')
+        notify(src, 'Kamu bukan CEO LAJU.', 'error')
         return
     end
 
@@ -585,7 +611,7 @@ lib.addCommand('promoteojol', {
     local ok, reason, newRank = drivers.PromoteDriver(targetCitizenid)
     if not ok then
         local messages = {
-            not_registered = 'Player ini bukan driver Ojol terdaftar.',
+            not_registered = 'Player ini bukan Mitra LAJU terdaftar.',
             cannot_promote = 'Driver ini tidak bisa dinaikkan ranknya lagi.',
             rank_not_manageable = 'Rank ini tidak bisa dikelola oleh CEO.',
             database_error = 'Gagal menyimpan perubahan rank.',
@@ -595,11 +621,11 @@ lib.addCommand('promoteojol', {
     end
 
     notify(src, ('Driver berhasil dipromosikan ke %s.'):format(newRank), 'success')
-    notify(targetSrc, ('Rank Ojol kamu naik ke %s.'):format(newRank), 'success')
+    notify(targetSrc, ('Rank LAJU kamu naik ke %s.'):format(newRank), 'success')
 end)
 
 lib.addCommand('demoteojol', {
-    help = 'CEO: turunkan rank driver Ojol (supervisor -> senior_driver -> driver)',
+    help = 'CEO LAJU: turunkan rank Mitra LAJU (supervisor -> senior_driver -> driver)',
     params = {
         { name = 'serverId', help = 'Server ID target', type = 'playerId' },
     },
@@ -610,7 +636,7 @@ lib.addCommand('demoteojol', {
 
     local callerCitizenid = drivers.ResolveCitizenid(src)
     if not callerCitizenid or not drivers.IsActingCEO(callerCitizenid) then
-        notify(src, 'Kamu bukan CEO Ojol.', 'error')
+        notify(src, 'Kamu bukan CEO LAJU.', 'error')
         return
     end
 
@@ -629,7 +655,7 @@ lib.addCommand('demoteojol', {
     local ok, reason, newRank = drivers.DemoteDriver(targetCitizenid)
     if not ok then
         local messages = {
-            not_registered = 'Player ini bukan driver Ojol terdaftar.',
+            not_registered = 'Player ini bukan Mitra LAJU terdaftar.',
             cannot_demote = 'Driver ini tidak bisa diturunkan ranknya lagi.',
             rank_not_manageable = 'Rank ini tidak bisa dikelola oleh CEO.',
             database_error = 'Gagal menyimpan perubahan rank.',
@@ -639,7 +665,7 @@ lib.addCommand('demoteojol', {
     end
 
     notify(src, ('Driver berhasil diturunkan ke %s.'):format(newRank), 'success')
-    notify(targetSrc, ('Rank Ojol kamu turun ke %s.'):format(newRank), 'error')
+    notify(targetSrc, ('Rank LAJU kamu turun ke %s.'):format(newRank), 'error')
 end)
 
 -- Admin job-management API ----------------------------------------------------

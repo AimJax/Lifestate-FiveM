@@ -25,7 +25,7 @@ const NotificationIcon = (props) =>
 
 const config = () => ({
   id: 'npwd_lifestate_ojol',
-  nameLocale: 'Ojol',
+  nameLocale: 'LAJU Mitra',
   color: '#ffffff',
   backgroundColor: '#333333',
   path,

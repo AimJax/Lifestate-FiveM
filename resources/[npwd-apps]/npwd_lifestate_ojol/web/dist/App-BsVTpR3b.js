@@ -32,7 +32,7 @@ const React = await importShared("react");
 let cachedDriverState = null;
 let cachedRideState = null;
 const REASON_MESSAGES = {
-  not_registered: "ANDA BELUM TERDAFTAR SEBAGAI DRIVER OJOL",
+  not_registered: "ANDA BELUM TERDAFTAR SEBAGAI MITRA LAJU",
   not_eligible: "Order ini tidak tersedia untukmu.",
   order_already_taken: "Order sudah diambil driver lain.",
   ride_not_found: "Order tidak ditemukan.",
@@ -42,8 +42,8 @@ const REASON_MESSAGES = {
   busy: "Kamu sedang menerima order.",
   busy_active_ride: "Selesaikan atau batalkan order aktif terlebih dahulu.",
   too_fast: "Terlalu cepat. Coba lagi sebentar.",
-  invalid_state: "Gagal mengubah status Ojol.",
-  callback_failed: "Gagal mengambil status Ojol.",
+  invalid_state: "Gagal mengubah status LAJU Mitra.",
+  callback_failed: "Gagal mengambil status LAJU Mitra.",
   not_ride_owner: "Order ini bukan milikmu.",
   wrong_state: "Aksi tidak tersedia untuk status order ini.",
   too_far_from_pickup: "Kamu terlalu jauh dari titik jemput.",
@@ -205,8 +205,8 @@ function App() {
   const offers = rideState?.offers || [];
   const activeRide = rideState?.active;
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.container, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.app, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.title, children: "OJOL" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.subtitle, children: "Lifestate Ojol Driver" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.title, children: "LAJU" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.subtitle, children: "LAJU Mitra" }),
     registered ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.statusRow, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { ...styles.dot, ...busy ? styles.busyDot : online ? styles.onlineDot : {} } }),
@@ -335,12 +335,12 @@ function App() {
           style: { ...styles.button, ...online ? styles.offlineButton : styles.onlineButton },
           disabled: submitting,
           onClick: () => changeDuty(!online),
-          children: online ? "SELESAI NGE-OJOL" : "MULAI NGE-OJOL"
+          children: online ? "SELESAI NARIK" : "MULAI NARIK"
         }
       )
     ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.desc, children: REASON_MESSAGES.not_registered }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.hint, children: "Hubungi CEO Ojol untuk mendaftar sebagai driver." })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.hint, children: "Hubungi CEO LAJU untuk mendaftar sebagai Mitra." })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.error, children: error })
   ] }) });

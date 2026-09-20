@@ -1,4 +1,4 @@
--- Pangkalan Ojek dispatcher ped (local, per client).
+-- Pangkalan LAJU dispatcher ped (local, per client).
 --
 -- ROOT CAUSE OF THE MISSING NPC (verified against this install, not guessed):
 --

@@ -1,13 +1,13 @@
 {
-    "app_name": "Ojol",
+    "app_name": "LAJU Mitra",
     "offline": "OFFLINE",
     "online": "ONLINE",
     "offline_desc": "Kamu sedang tidak menerima order.",
     "online_desc": "Kamu siap menerima order.",
-    "start_button": "MULAI NGE-OJOL",
-    "end_button": "SELESAI NGE-OJOL",
-    "not_ojol": "Anda bukan driver Ojol.",
+    "start_button": "MULAI NARIK",
+    "end_button": "SELESAI NARIK",
+    "not_ojol": "Anda bukan Mitra LAJU.",
     "loading": "Memuat...",
-    "error_fetch": "Gagal mengambil status Ojol.",
-    "error_set": "Gagal mengubah status Ojol."
+    "error_fetch": "Gagal mengambil status LAJU Mitra.",
+    "error_set": "Gagal mengubah status LAJU Mitra."
 }

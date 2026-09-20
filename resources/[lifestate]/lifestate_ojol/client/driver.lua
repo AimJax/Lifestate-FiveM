@@ -79,7 +79,7 @@ RegisterNetEvent('lifestate_ojol:client:driverOfferChanged', function(offer)
     if not offer then return end
 
     lib.notify({
-        title = 'Ojol',
+        title = 'LAJU Mitra',
         description = ('ORDER BARU - %s'):format(tostring(offer.customerName or 'Penumpang')),
         type = 'inform',
     })
@@ -93,7 +93,7 @@ RegisterNetEvent('lifestate_ojol:client:driverRideChanged', function(ride)
 
         if wasActive and ride then
             lib.notify({
-                title = 'Ojol',
+                title = 'LAJU Mitra',
                 description = TERMINAL_MESSAGES[ride.status] or 'Order berakhir.',
                 type = 'inform',
             })
@@ -105,7 +105,7 @@ RegisterNetEvent('lifestate_ojol:client:driverRideChanged', function(ride)
     if isNewRide then
         activeRideId = ride.rideId
         lib.notify({
-            title = 'Ojol',
+            title = 'LAJU Mitra',
             description = 'Order diterima. Jemput penumpang di titik jemput.',
             type = 'success',
         })
@@ -115,7 +115,7 @@ RegisterNetEvent('lifestate_ojol:client:driverRideChanged', function(ride)
         -- Passenger leg: pickup blip is replaced by the destination route.
         if activeLeg ~= 'destination' then
             lib.notify({
-                title = 'Ojol',
+                title = 'LAJU Mitra',
                 description = 'Penumpang sudah naik. Antar ke tujuan.',
                 type = 'success',
             })

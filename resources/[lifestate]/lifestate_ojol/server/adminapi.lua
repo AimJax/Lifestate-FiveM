@@ -70,7 +70,7 @@ function M.RegisterDriver(target, reason)
 
     local src = drivers.SourceByCitizenid[citizenid]
     if src then
-        notify(src, 'Kamu sekarang terdaftar sebagai driver Ojol.', 'success')
+        notify(src, 'Kamu sekarang terdaftar sebagai Mitra LAJU.', 'success')
 
         -- Live refresh: the dispatcher unlocks and the Driver app becomes eligible
         -- without a reconnect (registration and reactivation share this path).
@@ -171,7 +171,7 @@ function M.AssignCEO(target, reason)
 
     local src = drivers.SourceByCitizenid[citizenid]
     if src then
-        notify(src, 'Kamu sekarang CEO Ojol.', 'success')
+        notify(src, 'Kamu sekarang CEO LAJU.', 'success')
         TriggerClientEvent('lifestate_ojol:client:driverStateChanged', src,
             drivers.GetDriverStateSnapshot(citizenid))
     end

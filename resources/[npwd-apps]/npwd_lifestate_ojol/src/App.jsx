@@ -4,7 +4,7 @@ let cachedDriverState = null
 let cachedRideState = null
 
 const REASON_MESSAGES = {
-  not_registered: 'ANDA BELUM TERDAFTAR SEBAGAI DRIVER OJOL',
+  not_registered: 'ANDA BELUM TERDAFTAR SEBAGAI MITRA LAJU',
   not_eligible: 'Order ini tidak tersedia untukmu.',
   order_already_taken: 'Order sudah diambil driver lain.',
   ride_not_found: 'Order tidak ditemukan.',
@@ -14,8 +14,8 @@ const REASON_MESSAGES = {
   busy: 'Kamu sedang menerima order.',
   busy_active_ride: 'Selesaikan atau batalkan order aktif terlebih dahulu.',
   too_fast: 'Terlalu cepat. Coba lagi sebentar.',
-  invalid_state: 'Gagal mengubah status Ojol.',
-  callback_failed: 'Gagal mengambil status Ojol.',
+  invalid_state: 'Gagal mengubah status LAJU Mitra.',
+  callback_failed: 'Gagal mengambil status LAJU Mitra.',
   not_ride_owner: 'Order ini bukan milikmu.',
   wrong_state: 'Aksi tidak tersedia untuk status order ini.',
   too_far_from_pickup: 'Kamu terlalu jauh dari titik jemput.',
@@ -228,8 +228,8 @@ function App() {
   return (
     <div style={styles.container}>
       <div style={styles.app}>
-        <div style={styles.title}>OJOL</div>
-        <div style={styles.subtitle}>Lifestate Ojol Driver</div>
+        <div style={styles.title}>LAJU</div>
+        <div style={styles.subtitle}>LAJU Mitra</div>
 
         {registered ? (
           <>
@@ -384,14 +384,14 @@ function App() {
                 disabled={submitting}
                 onClick={() => changeDuty(!online)}
               >
-                {online ? 'SELESAI NGE-OJOL' : 'MULAI NGE-OJOL'}
+                {online ? 'SELESAI NARIK' : 'MULAI NARIK'}
               </button>
             )}
           </>
         ) : (
           <>
             <div style={styles.desc}>{REASON_MESSAGES.not_registered}</div>
-            <div style={styles.hint}>Hubungi CEO Ojol untuk mendaftar sebagai driver.</div>
+            <div style={styles.hint}>Hubungi CEO LAJU untuk mendaftar sebagai Mitra.</div>
           </>
         )}
 

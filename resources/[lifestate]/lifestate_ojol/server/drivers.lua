@@ -141,10 +141,10 @@ end
 function M.GetDisplayName(citizenid)
     local player = exports.qbx_core:GetPlayerByCitizenId(citizenid)
     local charinfo = player and player.PlayerData and player.PlayerData.charinfo
-    if not charinfo then return 'Pengguna Ojol' end
+    if not charinfo then return 'Pengguna LAJU' end
 
     local name = ('%s %s'):format(tostring(charinfo.firstname or ''), tostring(charinfo.lastname or '')):gsub('^%s+', ''):gsub('%s+$', '')
-    if name == '' then return 'Pengguna Ojol' end
+    if name == '' then return 'Pengguna LAJU' end
 
     return name
 end
@@ -165,7 +165,7 @@ end
 
 -- Transitions ---------------------------------------------------------------
 
----Register a player as an Ojol driver (CEO action, server-authoritative).
+---Register a player as a Mitra LAJU driver (CEO action, server-authoritative).
 ---A previously fired driver keeps their persistent record: this reactivates the
 ---same row (same citizenid), preserving profile, registration and statistics.
 ---Rank resets to 'driver' on rehire; a CEO record is never lowered here.

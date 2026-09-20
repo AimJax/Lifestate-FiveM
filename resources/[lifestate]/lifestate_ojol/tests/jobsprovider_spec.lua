@@ -312,7 +312,7 @@ h.test('the provider registers serializable metadata only', function()
 
     local definition = host.provider
     h.eq(definition.id, 'ojol', 'provider id')
-    h.eq(definition.label, 'Ojol', 'label')
+    h.eq(definition.label, 'Mitra LAJU', 'label')
     h.eq(definition.type, 'profession', 'independent profession')
     h.eq(definition.resource, nil, 'no owner declared: the registry records the caller')
     h.eq(definition.mode, nil, 'no mode declared either: the boundary forces external')
@@ -324,6 +324,7 @@ h.test('the provider registers serializable metadata only', function()
     h.eq(definition.operations.remove, 'adminRemoveDriver', 'remove is an export name')
     h.eq(definition.operations.inspect, 'getDriverAdminState', 'inspect is an export name')
     h.eq(definition.actions[1].export, 'assignCEO', 'the CEO action is an export name')
+    h.eq(definition.actions[1].label, 'Set CEO LAJU', 'the CEO action carries LAJU branding')
     h.eq(definition.actions[1].handler, nil, 'the CEO action carries no handler')
     h.eq(definition.actions[1].confirm, true, 'CEO assignment still asks for confirmation')
     h.contains(definition.messages.cannot_fire_ceo, 'Reassign the CEO first',
@@ -510,7 +511,7 @@ h.test('the Set CEO export uses the trusted single-CEO path and names its outcom
     h.eq(dbState.rows[CIT].rank, 'ceo', 'rank written')
     h.eq(drivers.IsCEO(CIT), true, 'authoritative in runtime')
     h.eq(#clientEvents('lifestate_ojol:client:driverStateChanged'), 1, 'target refreshed')
-    h.eq(host.notifies[1].message, 'Kamu sekarang CEO Ojol.', 'target notified')
+    h.eq(host.notifies[1].message, 'Kamu sekarang CEO LAJU.', 'target notified')
 end)
 
 h.test('the Set CEO export demotes the previous CEO, so there is only ever one', function()

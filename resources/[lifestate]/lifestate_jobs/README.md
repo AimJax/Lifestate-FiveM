@@ -52,7 +52,7 @@ own server exports instead of sending functions:
 ```lua
 exports.lifestate_jobs:RegisterProvider({
     id = 'ojol',                 -- unique; 'qbx:<job>' is reserved for the adapter
-    label = 'Ojol',              -- what the menu shows
+    label = 'Mitra LAJU',          -- what the menu shows
     type = 'profession',         -- 'profession' | 'framework_job' | your own
     order = 10,                  -- sort hint (framework jobs use 200)
     -- No `resource` field: ownership is resolved by lifestate_jobs from the

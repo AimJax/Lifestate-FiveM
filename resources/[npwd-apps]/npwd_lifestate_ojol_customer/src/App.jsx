@@ -5,7 +5,7 @@ let cachedRide = null
 const REASON_MESSAGES = {
   no_waypoint: 'Pasang waypoint di peta GTA untuk menentukan tujuan.',
   destination_not_on_road: 'Tujuan harus berada di jalan yang bisa dilalui.',
-  unavailable: 'Aplikasi Ojol belum siap. Coba lagi sebentar.',
+  unavailable: 'Aplikasi LAJU belum siap. Coba lagi sebentar.',
   already_active: 'Kamu masih punya order aktif.',
   invalid_destination: 'Tujuan tidak valid.',
   invalid_pickup: 'Lokasi jemput tidak valid.',
@@ -16,7 +16,7 @@ const REASON_MESSAGES = {
   no_ride: 'Kamu tidak punya order aktif.',
   cannot_cancel_after_pickup: 'Perjalanan sudah berjalan.',
   too_fast: 'Terlalu cepat. Coba lagi sebentar.',
-  callback_failed: 'Gagal menghubungi server Ojol.',
+  callback_failed: 'Gagal menghubungi server LAJU.',
   not_ride_owner: 'Order ini bukan milikmu.',
   wrong_state: 'Aksi tidak tersedia sekarang.',
   payment_in_progress: 'Pembayaran sedang diproses.',
@@ -294,7 +294,7 @@ function App() {
             {finishedRide.driver.profilePhoto ? (
               <img src={finishedRide.driver.profilePhoto} alt="Driver" style={styles.driverPhoto} />
             ) : (
-              <div style={styles.driverPhotoPlaceholder}>OJOL</div>
+              <div style={styles.driverPhotoPlaceholder}>LAJU</div>
             )}
             <div style={styles.driverName}>{finishedRide.driver.name}</div>
           </div>
@@ -350,7 +350,7 @@ function App() {
             {ride.driver.profilePhoto ? (
               <img src={ride.driver.profilePhoto} alt="Driver" style={styles.driverPhoto} />
             ) : (
-              <div style={styles.driverPhotoPlaceholder}>OJOL</div>
+              <div style={styles.driverPhotoPlaceholder}>LAJU</div>
             )}
             <div style={styles.driverName}>{ride.driver.name}</div>
             <div style={styles.driverMeta}>
@@ -477,7 +477,7 @@ function App() {
               disabled={busy || !canAfford}
               onClick={requestRide}
             >
-              PESAN OJOL
+              PESAN LAJU
             </button>
           </>
         ) : null}
@@ -488,8 +488,8 @@ function App() {
   return (
     <div style={styles.container}>
       <div style={styles.app}>
-        <div style={styles.title}>OJOL</div>
-        <div style={styles.subtitle}>Pesan Ojek Online</div>
+        <div style={styles.title}>LAJU</div>
+        <div style={styles.subtitle}>Pesan Transportasi LAJU</div>
 
         {screen}
 

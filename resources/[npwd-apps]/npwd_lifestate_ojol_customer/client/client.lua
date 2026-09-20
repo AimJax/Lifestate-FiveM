@@ -141,7 +141,7 @@ RegisterNetEvent('lifestate_ojol:client:customerRideChanged', function(view)
         exports.npwd:createNotification({
             notisId = 'ojol:driverfound',
             appId = 'npwd_lifestate_ojol_customer',
-            content = ('Driver ditemukan: %s'):format(tostring(view.driver.name or 'Driver Ojol')),
+            content = ('Driver ditemukan: %s'):format(tostring(view.driver.name or 'Mitra LAJU')),
             keepOpen = false,
             duration = 8000,
             path = '/npwd_lifestate_ojol_customer',

@@ -80,8 +80,8 @@ end
 local function takeMotor()
     if not driverRegistered then
         lib.notify({
-            title = 'Pangkalan Ojek',
-            description = 'Kamu belum terdaftar sebagai driver Ojol.',
+            title = 'Pangkalan LAJU',
+            description = 'Kamu belum terdaftar sebagai Mitra LAJU.',
             type = 'error'
         })
         return
@@ -89,8 +89,8 @@ local function takeMotor()
 
     if not driverOnline then
         lib.notify({
-            title = 'Pangkalan Ojek',
-            description = 'Kamu belum online. Check-in melalui aplikasi Ojol terlebih dahulu.',
+            title = 'Pangkalan LAJU',
+            description = 'Kamu belum online. Check-in melalui LAJU Mitra terlebih dahulu.',
             type = 'error'
         })
         return
@@ -104,8 +104,8 @@ end
 RegisterNetEvent("lifestate_ojol:client:TakeVehicle", function(data)
     if not driverRegistered then
         lib.notify({
-            title = 'Ojol',
-            description = 'Kamu belum terdaftar sebagai driver Ojol.',
+            title = 'LAJU',
+            description = 'Kamu belum terdaftar sebagai Mitra LAJU.',
             type = 'error'
         })
         return
@@ -113,8 +113,8 @@ RegisterNetEvent("lifestate_ojol:client:TakeVehicle", function(data)
 
     if not driverOnline then
         lib.notify({
-            title = 'Ojol',
-            description = 'Kamu belum online. Check-in melalui aplikasi Ojol terlebih dahulu.',
+            title = 'LAJU',
+            description = 'Kamu belum online. Check-in melalui LAJU Mitra terlebih dahulu.',
             type = 'error'
         })
         return
@@ -184,8 +184,8 @@ RegisterNetEvent('lifestate_ojol:client:driverRevoked', function()
     driverOnline = false
 
     lib.notify({
-        title = 'Ojol',
-        description = 'Registrasi Ojol kamu dicabut.',
+        title = 'LAJU',
+        description = 'Registrasi LAJU kamu dicabut.',
         type = 'error'
     })
 end)

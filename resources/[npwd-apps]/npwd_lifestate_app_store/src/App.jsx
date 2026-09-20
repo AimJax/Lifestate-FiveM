@@ -26,7 +26,7 @@ const nui = (endpoint, body) =>
   ).then((response) => response.json())
 
 const REASON_MESSAGES = {
-  driver_only: 'Hanya driver Ojol terdaftar yang bisa memasang aplikasi ini.',
+  driver_only: 'Hanya Mitra LAJU terdaftar yang bisa memasang aplikasi ini.',
   invalid_character: 'Karakter tidak valid.',
   too_fast: 'Terlalu cepat. Coba lagi sebentar.',
   database_error: 'Gagal menyimpan perubahan. Coba lagi.',

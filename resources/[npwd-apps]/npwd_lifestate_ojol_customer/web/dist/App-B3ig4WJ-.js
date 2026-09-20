@@ -33,7 +33,7 @@ let cachedRide = null;
 const REASON_MESSAGES = {
   no_waypoint: "Pasang waypoint di peta GTA untuk menentukan tujuan.",
   destination_not_on_road: "Tujuan harus berada di jalan yang bisa dilalui.",
-  unavailable: "Aplikasi Ojol belum siap. Coba lagi sebentar.",
+  unavailable: "Aplikasi LAJU belum siap. Coba lagi sebentar.",
   already_active: "Kamu masih punya order aktif.",
   invalid_destination: "Tujuan tidak valid.",
   invalid_pickup: "Lokasi jemput tidak valid.",
@@ -44,7 +44,7 @@ const REASON_MESSAGES = {
   no_ride: "Kamu tidak punya order aktif.",
   cannot_cancel_after_pickup: "Perjalanan sudah berjalan.",
   too_fast: "Terlalu cepat. Coba lagi sebentar.",
-  callback_failed: "Gagal menghubungi server Ojol.",
+  callback_failed: "Gagal menghubungi server LAJU.",
   not_ride_owner: "Order ini bukan milikmu.",
   wrong_state: "Aksi tidak tersedia sekarang.",
   payment_in_progress: "Pembayaran sedang diproses.",
@@ -242,7 +242,7 @@ function App() {
     screen = /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.statusHeader, children: "Perjalanan selesai" }),
       finishedRide.driver ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.driverCard, children: [
-        finishedRide.driver.profilePhoto ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: finishedRide.driver.profilePhoto, alt: "Driver", style: styles.driverPhoto }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.driverPhotoPlaceholder, children: "OJOL" }),
+        finishedRide.driver.profilePhoto ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: finishedRide.driver.profilePhoto, alt: "Driver", style: styles.driverPhoto }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.driverPhotoPlaceholder, children: "LAJU" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.driverName, children: finishedRide.driver.name })
       ] }) : null,
       finishedRide.rated || ratedRideIds.includes(finishedRide.rideId) ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.completedNote, children: "Terima kasih! Rating kamu sudah terkirim." }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
@@ -284,7 +284,7 @@ function App() {
     screen = /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.statusHeader, children: STATUS_TEXT[ride.status] || ride.status }),
       ride.driver ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.driverCard, children: [
-        ride.driver.profilePhoto ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: ride.driver.profilePhoto, alt: "Driver", style: styles.driverPhoto }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.driverPhotoPlaceholder, children: "OJOL" }),
+        ride.driver.profilePhoto ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: ride.driver.profilePhoto, alt: "Driver", style: styles.driverPhoto }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.driverPhotoPlaceholder, children: "LAJU" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.driverName, children: ride.driver.name }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.driverMeta, children: [
           ride.driver.rank ? `${ride.driver.rank} - ` : "",
@@ -390,15 +390,15 @@ function App() {
             style: { ...styles.button, ...styles.primaryButton },
             disabled: busy || !canAfford,
             onClick: requestRide,
-            children: "PESAN OJOL"
+            children: "PESAN LAJU"
           }
         )
       ] }) : null
     ] });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.container, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.app, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.title, children: "OJOL" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.subtitle, children: "Pesan Ojek Online" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.title, children: "LAJU" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.subtitle, children: "Pesan Transportasi LAJU" }),
     screen,
     loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.hint, children: "Memuat..." }) : null,
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.error, children: error })

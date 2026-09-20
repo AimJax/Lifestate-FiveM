@@ -43,7 +43,7 @@ M.RETRY_DELAYS_MS = { 500, 1000, 2000, 5000 }
 local function definition()
     return {
         id = M.PROVIDER_ID,
-        label = 'Ojol',
+        label = 'Mitra LAJU',
         type = 'profession',
         order = 10,
 
@@ -58,15 +58,15 @@ local function definition()
         },
 
         messages = {
-            cannot_fire_ceo = 'This player is the active Ojol CEO. Reassign the CEO first '
-                .. '(Advanced Provider Actions -> Set Ojol CEO), then remove.',
+            cannot_fire_ceo = 'This player is the active LAJU CEO. Reassign the CEO first '
+                .. '(Advanced Provider Actions -> Set CEO LAJU), then remove.',
         },
 
         actions = {
             {
                 id = 'setCeo',
-                label = 'Set Ojol CEO',
-                description = 'Assign the Ojol CEO rank (the previous CEO is demoted to driver).',
+                label = 'Set CEO LAJU',
+                description = 'Assign the LAJU CEO rank (the previous CEO is demoted to driver).',
                 confirm = true,
                 export = 'assignCEO',
             },
@@ -129,7 +129,7 @@ function M.RegisterWithRetry()
     end
 
     print(('[ojol] job provider not registered: %s never became available '
-        .. '(job management will run without Ojol)'):format(M.REGISTRY_RESOURCE))
+        .. '(job management will run without LAJU)'):format(M.REGISTRY_RESOURCE))
 
     return false, 'registry_unavailable'
 end

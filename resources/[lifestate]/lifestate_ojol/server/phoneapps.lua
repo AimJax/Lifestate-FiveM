@@ -73,14 +73,14 @@ M.BUILTIN_APPS = {
 M.CATALOG = {
     {
         id = M.APP_OJOL_CUSTOMER,
-        name = 'Ojol',
-        description = 'Pesan transportasi Ojol',
+        name = 'LAJU',
+        description = 'Pesan transportasi dengan LAJU',
         requiresDriver = false,
     },
     {
         id = M.APP_OJOL_DRIVER,
-        name = 'Ojol Driver',
-        description = 'Aplikasi kerja driver Ojol',
+        name = 'LAJU Mitra',
+        description = 'Aplikasi kerja Mitra LAJU',
         requiresDriver = true,
     },
     {
@@ -306,7 +306,7 @@ function M.BuildStoreState(citizenid)
         -- the label, because nil is falsy in Lua.
         if not eligible then
             view.reason = reason or 'not_eligible'
-            view.lockLabel = 'Harus terdaftar sebagai driver Ojol'
+            view.lockLabel = 'Harus terdaftar sebagai Mitra LAJU'
         end
 
         apps[#apps + 1] = view

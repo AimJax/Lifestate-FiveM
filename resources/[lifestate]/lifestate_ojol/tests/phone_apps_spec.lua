@@ -550,8 +550,27 @@ h.test('the store state locks the Driver app for a non-driver', function()
 
     h.eq(driver.eligible, false, 'not eligible')
     h.eq(driver.reason, 'driver_only', 'reason')
-    h.eq(driver.lockLabel, 'Harus terdaftar sebagai driver Ojol', 'lock label')
+    h.eq(driver.lockLabel, 'Harus terdaftar sebagai Mitra LAJU', 'lock label')
     h.eq(state.driverRegistered, false, 'driver flag')
+end)
+
+h.test('the store catalog carries LAJU branding on stable app ids', function()
+    reset()
+
+    local state = phoneapps.BuildStoreState(CHARACTER)
+
+    local customer, driver
+    for _, entry in ipairs(state.apps) do
+        if entry.id == OJOL_CUSTOMER then customer = entry end
+        if entry.id == OJOL_DRIVER then driver = entry end
+    end
+
+    h.eq(customer.id, 'npwd_lifestate_ojol_customer', 'customer app id stable')
+    h.eq(customer.name, 'LAJU', 'customer name')
+    h.eq(customer.description, 'Pesan transportasi dengan LAJU', 'customer description')
+    h.eq(driver.id, 'npwd_lifestate_ojol', 'driver app id stable')
+    h.eq(driver.name, 'LAJU Mitra', 'driver name')
+    h.eq(driver.description, 'Aplikasi kerja Mitra LAJU', 'driver description')
 end)
 
 -- Query economy ---------------------------------------------------------------

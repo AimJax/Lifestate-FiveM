@@ -1,5 +1,5 @@
 import { importShared } from "./__federation_fn_import-eda1j03z.js";
-import { A as App } from "./App-I2j6s7Wm.js";
+import { A as App } from "./App-Dx7xsKRJ.js";
 const React = await importShared("react");
 const path = "/npwd_lifestate_app_store";
 const Icon = (props) => React.createElement(

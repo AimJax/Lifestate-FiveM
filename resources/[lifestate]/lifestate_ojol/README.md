@@ -1,5 +1,8 @@
 # lifestate_ojol
 
+LAJU is the player-facing brand. Existing `ojol` identifiers are retained
+internally for persistence and compatibility.
+
 Ojol profession foundation for Lifestate Roleplay (Qbox).
 
 ## Phase 3A scope
@@ -288,8 +291,10 @@ Live ride state is never written per tick; only creation, acceptance and the ter
 
 | Command | Description |
 | --- | --- |
-| `/daftarojol [serverId]` | Register a nearby player as Ojol driver (max 3 m, server-validated). |
-| `/pecatojol [serverId]` | Fire a nearby registered driver (soft deactivation, see below). |
+| `/daftarlaju [serverId]` | Register a nearby player as Mitra LAJU (max 3 m, server-validated). |
+| `/pecatlaju [serverId]` | Fire a nearby registered driver (soft deactivation, see below). |
+| `/daftarojol [serverId]` | Backward-compatible alias of `/daftarlaju`. |
+| `/pecatojol [serverId]` | Backward-compatible alias of `/pecatlaju`. |
 | `/promoteojol [serverId]` | Promote: driver -> senior_driver -> supervisor. |
 | `/demoteojol [serverId]` | Demote: supervisor -> senior_driver -> driver. |
 

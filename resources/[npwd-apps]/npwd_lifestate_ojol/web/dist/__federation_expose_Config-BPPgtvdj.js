@@ -1,5 +1,5 @@
 import { importShared } from "./__federation_fn_import-eda1j03z.js";
-import { A as App } from "./App-CZKYC4YI.js";
+import { A as App } from "./App-BsVTpR3b.js";
 const React = await importShared("react");
 const path = "/npwd_lifestate_ojol";
 const Icon = (props) => React.createElement(
@@ -24,7 +24,7 @@ const NotificationIcon = (props) => React.createElement(
 );
 const config = () => ({
   id: "npwd_lifestate_ojol",
-  nameLocale: "Ojol",
+  nameLocale: "LAJU Mitra",
   color: "#ffffff",
   backgroundColor: "#333333",
   path,

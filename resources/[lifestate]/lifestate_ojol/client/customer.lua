@@ -108,7 +108,7 @@ RegisterNetEvent('lifestate_ojol:client:driverLocation', function(coords)
         SetBlipAsShortRange(driverBlip, false)
 
         BeginTextCommandSetBlipName('STRING')
-        AddTextComponentSubstringPlayerName('Driver Ojol')
+        AddTextComponentSubstringPlayerName('Mitra LAJU')
         EndTextCommandSetBlipName(driverBlip)
     else
         SetBlipCoords(driverBlip, coords.x + 0.0, coords.y + 0.0, (coords.z or 0.0) + 0.0)
