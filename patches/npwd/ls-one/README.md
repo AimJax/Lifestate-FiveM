@@ -61,7 +61,8 @@ alternate locations (the override path is used as given):
 4. applies `ls-one-shell.patch` (aborts unless every file in the patch shows
    the change),
 5. `pnpm install` (approves only the postinstalls the build needs),
-6. builds `@npwd/keyos` then `@npwd/nui` (`vite build --mode game`),
+6. builds `@npwd/keyos`, `@npwd/nui` (`vite build --mode game`) and the game
+   bridge (`node ./scripts/build.js` in `apps/game`),
 7. re-applies the production bundle patches onto the fresh build and
    verifies each replacement occurs exactly once:
    - `disabledApps` support (see `../index-ebf41f23.js.patch`; the app-array
@@ -71,7 +72,9 @@ alternate locations (the override path is used as given):
      `__federation_shared_react-router-dom-lifestate-backfix.js` with all
      references updated (see `../goBack-fallback.patch`),
 8. replaces `resources/[npwd]/npwd/dist/html` with the fresh output
-   (`dist/game` server code is never touched),
+   (`dist/game` server code is never touched) and deploys ONLY the rebuilt
+   game `client/client.js` (carries the read-only environment callback;
+   `server.js`/`cl_controls.lua` are untouched by LS One),
 9. verifies the LS One markers + both production patches in the deployed
    bundle.
 

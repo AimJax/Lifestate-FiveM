@@ -65,12 +65,26 @@ if ((Test-Path -LiteralPath (Join-Path $WorkDir '.git')) -and
 
 # 2. LS One source patch ------------------------------------------------------
 Step 'applying LS One source patch'
-git -C $WorkDir checkout -- apps/phone/src pnpm-workspace.yaml 2>&1 | Out-Null
+git -C $WorkDir checkout -- apps/phone/src apps/game/client pnpm-workspace.yaml 2>&1 | Out-Null
+# New-file hunks cannot apply over a leftover copy: drop workdir copies of
+# files the patch creates (tracked state is untouched by this).
+$patchText = Get-Content -LiteralPath $SourcePatch -Raw
+$blocks = $patchText -split '(?m)^(?=diff --git )'
+foreach ($block in $blocks) {
+  $m = [regex]::Match($block, '^diff --git a/(.+) b/.+\r?$', 'Multiline')
+  if ($m.Success -and $block -match '(?m)^new file mode') {
+    $victim = Join-Path $WorkDir ($m.Groups[1].Value -replace '/', '\')
+    git -C $WorkDir reset -q HEAD -- $m.Groups[1].Value 2>&1 | Out-Null
+    if (Test-Path -LiteralPath $victim) { Remove-Item -LiteralPath $victim -Force }
+  }
+}
 git -C $WorkDir apply --check $SourcePatch 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail 'ls-one-shell.patch does not apply cleanly (see patches/npwd/ls-one/README.md)' }
 git -C $WorkDir apply $SourcePatch 2>&1 | Out-Null
 $patchedFiles = @(Select-String -LiteralPath $SourcePatch -Pattern '^diff --git a/(.+) b/' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
-$changedFiles = @(git -C $WorkDir status --short | Where-Object { $_ -match '^ M' } | ForEach-Object { $_.Substring(3).Trim() } | Sort-Object -Unique)
+$changedFiles = @(git -C $WorkDir status --short | ForEach-Object {
+    if ($_ -match '^.{0,2}\s+(.+)$') { $Matches[1].Trim() }
+  } | Where-Object { $_ } | Sort-Object -Unique)
 $missing = @($patchedFiles | Where-Object { $changedFiles -notcontains $_ })
 if ($missing.Count -gt 0) { Fail ('patch applied but missing changes in: ' + ($missing -join ', ')) }
 
@@ -88,6 +102,14 @@ try {
   Step 'building @npwd/nui (phone frontend)'
   pnpm --filter '@npwd/nui' build 2>&1 | Out-Null
   if ($LASTEXITCODE -ne 0) { Fail 'phone frontend build failed' }
+  Step 'building NPWD game bridge (read-only environment NUI callback)'
+  Push-Location -LiteralPath (Join-Path $WorkDir 'apps\game')
+  try {
+    node ./scripts/build.js 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Fail 'game bridge build failed' }
+  } finally {
+    Pop-Location
+  }
 } finally {
   Pop-Location
 }
@@ -109,7 +131,7 @@ $indexBundle = Get-ChildItem -LiteralPath (Join-Path $BuildHtml 'assets') -Filte
 if (-not $indexBundle) { Fail 'index bundle not found in fresh build' }
 
 Step 're-applying disabledApps bundle patch'
-Assert-Replace $indexBundle 'i=Hg().iconSet.value,t=g6(()=>Ale.map(s=>{' 'i=Hg().iconSet.value,npwdDis=Ve(xi.resourceConfig)?.disabledApps||[],t=g6(()=>Ale.map(s=>{' 'disabledApps/fragment-1'
+Assert-Replace $indexBundle 'i=Hg().iconSet.value,t=g6(()=>Tle.map(s=>{' 'i=Hg().iconSet.value,npwdDis=Ve(xi.resourceConfig)?.disabledApps||[],t=g6(()=>Tle.map(s=>{' 'disabledApps/fragment-1'
 Assert-Replace $indexBundle 'isDisabled:s.disable}:{' 'isDisabled:s.disable||npwdDis.includes(s.id)}:{' 'disabledApps/fragment-2'
 Assert-Replace $indexBundle 'isDisabled:s.disable}}),[e,i,a])' 'isDisabled:s.disable||npwdDis.includes(s.id)}}),[e,i,a,npwdDis])' 'disabledApps/fragment-3'
 
@@ -139,6 +161,12 @@ Copy-Item -LiteralPath (Join-Path $BuildHtml 'assets') -Destination (Join-Path $
 Copy-Item -LiteralPath (Join-Path $BuildHtml 'media') -Destination (Join-Path $LiveHtml 'media') -Recurse
 Copy-Item -LiteralPath (Join-Path $BuildHtml 'index.html') -Destination (Join-Path $LiveHtml 'index.html')
 Copy-Item -LiteralPath (Join-Path $BuildHtml 'iframe.webcomp.js') -Destination (Join-Path $LiveHtml 'iframe.webcomp.js')
+# Game bridge: deploy ONLY the rebuilt client bundle (it carries the read-only
+# environment callback). server.js and cl_controls.lua are untouched by every
+# LS One change, so the live copies stay exactly as they were.
+$gameClient = Join-Path $WorkDir 'dist\game\client\client.js'
+$liveGameClient = Join-Path $RepoRoot 'resources\[npwd]\npwd\dist\game\client\client.js'
+Copy-Item -LiteralPath $gameClient -Destination $liveGameClient -Force
 
 # 6. Verify ---------------------------------------------------------------------
 $css = Get-ChildItem -LiteralPath (Join-Path $LiveHtml 'assets') -Filter 'index-*.css' |
@@ -153,6 +181,8 @@ if (-not $cssText.Contains('PhoneFrame:before')) { $failedChecks.Add('LS One fra
 if (-not $mainText.Contains('bg-white/85')) { $failedChecks.Add('LS One gesture pill') }
 if (-not ($jsText.Contains('npwdDis=') -and $jsText.Contains('disabledApps||'))) { $failedChecks.Add('disabledApps patch') }
 if (-not (Test-Path -LiteralPath (Join-Path $LiveHtml "assets\$backfixName"))) { $failedChecks.Add('goBack backfix chunk') }
+$liveGameText = Get-Content -LiteralPath (Join-Path $RepoRoot 'resources\[npwd]\npwd\dist\game\client\client.js') -Raw
+if (-not $liveGameText.Contains('npwd:getEnvironment')) { $failedChecks.Add('game environment bridge') }
 $staleRef = Get-ChildItem -LiteralPath $LiveHtml -Recurse -File |
   Select-String -Pattern 'react-router-dom-770100b8' | Select-Object -First 1
 if ($staleRef) { $failedChecks.Add(('stale router ref: ' + $staleRef.Path)) }

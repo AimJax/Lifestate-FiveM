@@ -1,3 +1,84 @@
+diff --git a/apps/game/client/cl_environment.ts b/apps/game/client/cl_environment.ts
+new file mode 100644
+index 00000000..e64a75d7
+--- /dev/null
++++ b/apps/game/client/cl_environment.ts
+@@ -0,0 +1,63 @@
++import { RegisterNuiCB } from './cl_utils';
++
++// Read-only environment bridge for the LS One home-screen widget.
++//
++// Weather comes from the live game state (GetPrevWeatherType). FiveM exposes
++// no temperature native, so the temperature is an ESTIMATE derived from the
++// current weather plus a diurnal curve on the game clock - documented as an
++// approximation, never presented as a sensor reading.
++const WEATHER_BASE_TEMP_C: Record<string, number> = {
++  CLEAR: 28,
++  EXTRASUNNY: 31,
++  NEUTRAL: 27,
++  SMOG: 27,
++  FOGGY: 23,
++  CLOUDS: 26,
++  OVERCAST: 24,
++  RAIN: 22,
++  THUNDER: 21,
++  CLEARING: 25,
++  SNOW: 18,
++  BLIZZARD: 17,
++  SNOWLIGHT: 19,
++  XMAS: 20,
++  HALLOWEEN: 26,
++};
++
++const WEATHER_LABEL: Record<string, string> = {
++  CLEAR: 'Cerah',
++  EXTRASUNNY: 'Sangat Cerah',
++  NEUTRAL: 'Netral',
++  SMOG: 'Berasap',
++  FOGGY: 'Berkabut',
++  CLOUDS: 'Berawan',
++  OVERCAST: 'Mendung',
++  RAIN: 'Hujan',
++  THUNDER: 'Badai Petir',
++  CLEARING: 'Hujan Reda',
++  SNOW: 'Bersalju',
++  BLIZZARD: 'Badai Salju',
++  SNOWLIGHT: 'Salju Ringan',
++  XMAS: 'Natal',
++  HALLOWEEN: 'Berkabut',
++};
++
++function estimateTempC(weather: string, hour: number): number {
++  const base = WEATHER_BASE_TEMP_C[weather] ?? 26;
++  // Warmest ~14:00, coolest ~04:00, +/-3C swing.
++  const swing = -Math.cos(((hour - 4) / 24) * Math.PI * 2) * 3;
++  return Math.round(base + swing);
++}
++
++RegisterNuiCB('npwd:getEnvironment', (_, cb) => {
++  const weather = GetPrevWeatherType();
++  const hour = GetClockHours();
++  const minute = GetClockMinutes();
++  cb({
++    weather,
++    label: WEATHER_LABEL[weather] ?? weather,
++    tempC: estimateTempC(weather, hour),
++    hour,
++    minute,
++  });
++});
+diff --git a/apps/game/client/client.ts b/apps/game/client/client.ts
+index ce874e7a..161212a7 100644
+--- a/apps/game/client/client.ts
++++ b/apps/game/client/client.ts
+@@ -2,6 +2,7 @@ import ClientUtils from './cl_utils';
+ import './cl_config';
+ 
+ import './cl_main';
++import './cl_environment';
+ import './cl_twitter';
+ import './cl_contacts';
+ import './cl_marketplace';
 diff --git a/apps/phone/src/Phone.css b/apps/phone/src/Phone.css
 index c2a1ec57..a78c10fc 100644
 --- a/apps/phone/src/Phone.css
@@ -114,33 +195,107 @@ index c2a1ec57..a78c10fc 100644
    box-sizing: border-box;
  }
 diff --git a/apps/phone/src/apps/home/components/Home.tsx b/apps/phone/src/apps/home/components/Home.tsx
-index 40d749e9..8dc7247d 100644
+index 40d749e9..741b8c6e 100644
 --- a/apps/phone/src/apps/home/components/Home.tsx
 +++ b/apps/phone/src/apps/home/components/Home.tsx
-@@ -1,33 +1,64 @@
- import React from 'react';
+@@ -1,33 +1,138 @@
+-import React from 'react';
++import React, { useEffect, useState } from 'react';
  import { AppWrapper } from '@ui/components';
 +import { AppIcon } from '@ui/components/AppIcon';
  import { Box } from '@mui/material';
 +import { Link } from 'react-router-dom';
++import { useTranslation } from 'react-i18next';
  import { GridMenu } from '@ui/components/GridMenu';
  import { useApps } from '@os/apps/hooks/useApps';
  import { useExternalApps } from '@common/hooks/useExternalApps';
 +import { IApp } from '@os/apps/config/apps';
++import fetchNui from '@utils/fetchNui';
 +
 +// LS One dock: exactly these core apps live in the hotbar, in this order.
 +// Everything else (including dynamic external apps) stays in the grid.
 +const DOCK_APP_IDS = ['DIALER', 'MESSAGES', 'CONTACTS', 'CAMERA'];
 +
-+const DockApp: React.FC<{ app: IApp }> = ({ app }) => (
-+  <Link
-+    to={app.path}
-+    style={{ textDecoration: 'none', display: 'flex' }}
-+    key={app.id}
-+  >
-+    <AppIcon {...app} dense />
-+  </Link>
-+);
++interface EnvState {
++  label: string;
++  tempC: number;
++  hour: number;
++  minute: number;
++}
++
++const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
++
++// LS One home widget: live game clock + live game weather + estimated
++// temperature, refreshed every minute. Rendered only once real data arrives
++// so the home screen never shows placeholder values.
++const HomeWidget: React.FC = () => {
++  const [env, setEnv] = useState<EnvState | null>(null);
++
++  useEffect(() => {
++    let alive = true;
++    const load = () => {
++      fetchNui<EnvState>('npwd:getEnvironment')
++        .then((data) => {
++          if (alive && data) setEnv(data);
++        })
++        .catch(() => {});
++    };
++    load();
++    const timer = setInterval(load, 60000);
++    return () => {
++      alive = false;
++      clearInterval(timer);
++    };
++  }, []);
++
++  if (!env) return null;
++
++  return (
++    <Box sx={{ padding: '6px 8px 0' }}>
++      <Box sx={{ color: '#FFFFFF', fontSize: '34px', fontWeight: 800, lineHeight: 1.1 }}>
++        {pad2(env.hour)}:{pad2(env.minute)}
++      </Box>
++      <Box sx={{ color: '#9AA3AF', fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>
++        {env.label} &middot; {env.tempC}&deg;C
++      </Box>
++    </Box>
++  );
++};
++
++const DockApp: React.FC<{ app: IApp }> = ({ app }) => {
++  const [t] = useTranslation();
++  return (
++    <Link
++      to={app.path}
++      style={{
++        textDecoration: 'none',
++        display: 'flex',
++        flexDirection: 'column',
++        alignItems: 'center',
++        gap: '4px',
++      }}
++      key={app.id}
++    >
++      <AppIcon {...app} dense />
++      <Box
++        component="div"
++        sx={{
++          color: '#cfd4da',
++          fontSize: '9.5px',
++          fontWeight: 600,
++          lineHeight: '12px',
++          maxWidth: '56px',
++          whiteSpace: 'nowrap',
++          overflow: 'hidden',
++          textOverflow: 'ellipsis',
++          textAlign: 'center',
++        }}
++      >
++        {t(app.nameLocale)}
++      </Box>
++    </Link>
++  );
++};
  
  export const HomeApp: React.FC = () => {
    const { apps } = useApps();
@@ -156,21 +311,22 @@ index 40d749e9..8dc7247d 100644
      <AppWrapper>
 -      <Box component="div" mt={6} px={1}>
 -        {apps && <GridMenu xs={3} items={[...apps, ...externalApps]} />}
++      <HomeWidget />
 +      <Box
 +        component="div"
-+        mt={7}
++        mt={4}
 +        px={2}
 +        sx={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
 +      >
 +        {apps && <GridMenu xs={3} items={gridApps} />}
 +      </Box>
-+      <Box display="flex" justifyContent="center" pb="34px" pt={1}>
++      <Box display="flex" justifyContent="center" pb="40px" pt={1}>
 +        <Box
 +          display="flex"
-+          alignItems="center"
++          alignItems="flex-start"
 +          sx={{
-+            gap: '20px',
-+            padding: '10px 22px',
++            gap: '18px',
++            padding: '12px 20px 10px',
 +            borderRadius: '24px',
 +            backgroundColor: 'rgba(20, 23, 29, 0.85)',
 +            border: '1px solid #292F3A',
@@ -388,24 +544,19 @@ index d6231ef3..7fb8880a 100644
  
  export default NotesIcon;
 diff --git a/apps/phone/src/os/apps/icons/material/app/SETTINGS.tsx b/apps/phone/src/os/apps/icons/material/app/SETTINGS.tsx
-index 3eb38180..5e250229 100644
+index 3eb38180..95780fe4 100644
 --- a/apps/phone/src/os/apps/icons/material/app/SETTINGS.tsx
 +++ b/apps/phone/src/os/apps/icons/material/app/SETTINGS.tsx
-@@ -1,6 +1,16 @@
+@@ -1,6 +1,11 @@
  import React from 'react';
 -import { Settings } from 'lucide-react';
  
 -const SettingsIcon: React.FC = () => <Settings size={30} />;
-+// LS One system glyph: three slider rows with offset knobs, filled geometry.
-+// Reads as settings/adjustments without a fussy gear.
++// LS One system glyph: proper gear, filled geometry matching the home icon
++// family. Replaces the confusing sliders mark.
 +const SettingsIcon: React.FC = () => (
 +  <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-+    <rect x="4" y="5.5" width="7" height="2.8" rx="1.4" />
-+    <rect x="14" y="5.5" width="6" height="2.8" rx="1.4" />
-+    <rect x="4" y="10.6" width="3" height="2.8" rx="1.4" />
-+    <rect x="10" y="10.6" width="10" height="2.8" rx="1.4" />
-+    <rect x="4" y="15.7" width="10" height="2.8" rx="1.4" />
-+    <rect x="17" y="15.7" width="3" height="2.8" rx="1.4" />
++    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.08-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
 +  </svg>
 +);
  
@@ -614,3 +765,52 @@ index 4fbd5f91..8e5b17e0 100644
    });
  
    return (
+diff --git a/apps/phone/src/ui/components/GridMenu.tsx b/apps/phone/src/ui/components/GridMenu.tsx
+index d99e2b3d..6e3c0c55 100644
+--- a/apps/phone/src/ui/components/GridMenu.tsx
++++ b/apps/phone/src/ui/components/GridMenu.tsx
+@@ -2,6 +2,7 @@ import React, { Fragment } from 'react';
+ import { AppIcon } from './AppIcon';
+ import { Box, Grid, GridSize } from '@mui/material';
+ import { Link } from 'react-router-dom';
++import { useTranslation } from 'react-i18next';
+ import { IApp } from '@os/apps/config/apps';
+ 
+ interface GridMenuProps {
+@@ -11,8 +12,9 @@ interface GridMenuProps {
+ }
+ 
+ export const GridMenu: React.FC<GridMenuProps> = ({ items, Component = AppIcon, xs }) => {
++  const [t] = useTranslation();
+   return (
+-    <Grid container alignItems="center" direction="row">
++    <Grid container alignItems="flex-start" direction="row">
+       {items &&
+         items.length &&
+         items.map((item) => (
+@@ -20,8 +22,24 @@ export const GridMenu: React.FC<GridMenuProps> = ({ items, Component = AppIcon,
+             {!item.isDisabled && (
+               <Grid item xs={xs} key={item.id}>
+                 <Box textAlign="center">
+-                  <Link to={item.path}>
++                  <Link to={item.path} style={{ textDecoration: 'none' }}>
+                     <Component {...item} />
++                    <Box
++                      component="div"
++                      sx={{
++                        color: '#cfd4da',
++                        fontSize: '10px',
++                        fontWeight: 600,
++                        lineHeight: '13px',
++                        marginTop: '6px',
++                        padding: '0 2px',
++                        whiteSpace: 'nowrap',
++                        overflow: 'hidden',
++                        textOverflow: 'ellipsis',
++                      }}
++                    >
++                      {t(item.nameLocale)}
++                    </Box>
+                   </Link>
+                 </Box>
+               </Grid>
