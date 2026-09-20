@@ -1,9 +1,9 @@
 diff --git a/apps/game/client/cl_environment.ts b/apps/game/client/cl_environment.ts
 new file mode 100644
-index 00000000..e64a75d7
+index 00000000..c108e1d5
 --- /dev/null
 +++ b/apps/game/client/cl_environment.ts
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,95 @@
 +import { RegisterNuiCB } from './cl_utils';
 +
 +// Read-only environment bridge for the LS One home-screen widget.
@@ -55,8 +55,40 @@ index 00000000..e64a75d7
 +  return Math.round(base + swing);
 +}
 +
++// Jenkins one-at-a-time hash (what FiveM's joaat() computes). Needed because
++// GetPrevWeatherType() hands back a HASH number, not a name string.
++function joaat(key: string): number {
++  const s = key.toLowerCase();
++  let h = 0;
++  for (let i = 0; i < s.length; i++) {
++    h += s.charCodeAt(i);
++    h += h << 10;
++    h ^= h >>> 6;
++  }
++  h += h << 3;
++  h ^= h >>> 11;
++  h += h << 15;
++  return h >>> 0;
++}
++
++const WEATHER_HASH_TO_NAME: Record<number, string> = {};
++for (const name of Object.keys(WEATHER_BASE_TEMP_C)) {
++  WEATHER_HASH_TO_NAME[joaat(name)] = name;
++}
++for (const name of Object.keys(WEATHER_LABEL)) {
++  if (!WEATHER_HASH_TO_NAME[joaat(name)]) WEATHER_HASH_TO_NAME[joaat(name)] = name;
++}
++
++// Resolve the previous weather type to a name, whether the native handed
++// back a string or a hash number. Never leaks a raw hash to the UI.
++function resolveWeather(raw: unknown): string {
++  if (typeof raw === 'string') return raw;
++  if (typeof raw === 'number') return WEATHER_HASH_TO_NAME[raw >>> 0] ?? 'CLEAR';
++  return 'CLEAR';
++}
++
 +RegisterNuiCB('npwd:getEnvironment', (_, cb) => {
-+  const weather = GetPrevWeatherType();
++  const weather = resolveWeather(GetPrevWeatherType());
 +  const hour = GetClockHours();
 +  const minute = GetClockMinutes();
 +  cb({
@@ -195,10 +227,10 @@ index c2a1ec57..a78c10fc 100644
    box-sizing: border-box;
  }
 diff --git a/apps/phone/src/apps/home/components/Home.tsx b/apps/phone/src/apps/home/components/Home.tsx
-index 40d749e9..741b8c6e 100644
+index 40d749e9..4e79ce22 100644
 --- a/apps/phone/src/apps/home/components/Home.tsx
 +++ b/apps/phone/src/apps/home/components/Home.tsx
-@@ -1,33 +1,138 @@
+@@ -1,33 +1,140 @@
 -import React from 'react';
 +import React, { useEffect, useState } from 'react';
  import { AppWrapper } from '@ui/components';
@@ -251,11 +283,11 @@ index 40d749e9..741b8c6e 100644
 +  if (!env) return null;
 +
 +  return (
-+    <Box sx={{ padding: '6px 8px 0' }}>
-+      <Box sx={{ color: '#FFFFFF', fontSize: '34px', fontWeight: 800, lineHeight: 1.1 }}>
++    <Box sx={{ padding: '6px 8px 0', textAlign: 'center' }}>
++      <Box sx={{ color: '#FFFFFF', fontSize: '44px', fontWeight: 800, lineHeight: 1.1 }}>
 +        {pad2(env.hour)}:{pad2(env.minute)}
 +      </Box>
-+      <Box sx={{ color: '#9AA3AF', fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>
++      <Box sx={{ color: '#9AA3AF', fontSize: '12px', fontWeight: 600, marginTop: '4px' }}>
 +        {env.label} &middot; {env.tempC}&deg;C
 +      </Box>
 +    </Box>
@@ -314,11 +346,13 @@ index 40d749e9..741b8c6e 100644
 +      <HomeWidget />
 +      <Box
 +        component="div"
-+        mt={4}
++        mt={2}
 +        px={2}
-+        sx={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
++        sx={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}
 +      >
-+        {apps && <GridMenu xs={3} items={gridApps} />}
++        <Box sx={{ marginTop: 'auto', paddingBottom: '16px' }}>
++          {apps && <GridMenu xs={3} items={gridApps} />}
++        </Box>
 +      </Box>
 +      <Box display="flex" justifyContent="center" pb="40px" pt={1}>
 +        <Box
@@ -562,7 +596,7 @@ index 3eb38180..95780fe4 100644
  
  export default SettingsIcon;
 diff --git a/apps/phone/src/os/navigation-bar/components/Navigation.tsx b/apps/phone/src/os/navigation-bar/components/Navigation.tsx
-index ef3d27c1..0b6f559e 100644
+index ef3d27c1..2bf5a0cb 100644
 --- a/apps/phone/src/os/navigation-bar/components/Navigation.tsx
 +++ b/apps/phone/src/os/navigation-bar/components/Navigation.tsx
 @@ -1,35 +1,24 @@
@@ -602,7 +636,7 @@ index ef3d27c1..0b6f559e 100644
 -      </div>
 +    /* LS One gesture bar: one floating pill, no bar background, no legacy
 +       buttons. Overlays the content safe-area; pointer events only on it. */
-+    <div className="absolute bottom-5 left-0 right-0 z-50 flex justify-center pointer-events-none">
++    <div className="absolute bottom-3 left-0 right-0 z-50 flex justify-center pointer-events-none">
 +      <button onClick={handleGoToMenu} aria-label="Home" className="pointer-events-auto px-6 py-2">
 +        <span className="block h-[5px] w-24 rounded-full bg-white/85" />
 +      </button>
