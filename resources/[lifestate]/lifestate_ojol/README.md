@@ -295,8 +295,10 @@ Live ride state is never written per tick; only creation, acceptance and the ter
 | `/pecatlaju [serverId]` | Fire a nearby registered driver (soft deactivation, see below). |
 | `/daftarojol [serverId]` | Backward-compatible alias of `/daftarlaju`. |
 | `/pecatojol [serverId]` | Backward-compatible alias of `/pecatlaju`. |
-| `/promoteojol [serverId]` | Promote: driver -> senior_driver -> supervisor. |
-| `/demoteojol [serverId]` | Demote: supervisor -> senior_driver -> driver. |
+| `/promotelaju [serverId]` | Promote: driver -> senior_driver -> supervisor. |
+| `/demotelaju [serverId]` | Demote: supervisor -> senior_driver -> driver. |
+| `/promoteojol [serverId]` | Backward-compatible alias of `/promotelaju`. |
+| `/demoteojol [serverId]` | Backward-compatible alias of `/demotelaju`. |
 
 CEO rank itself is assigned admin-side via `exports.lifestate_ojol:assignCEO(citizenid, reason)`.
 

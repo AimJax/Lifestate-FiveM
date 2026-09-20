@@ -580,12 +580,10 @@ lib.addCommand('pecatojol', {
     },
 }, fireDriverCommand)
 
-lib.addCommand('promoteojol', {
-    help = 'CEO LAJU: naikkan rank Mitra LAJU (driver -> senior_driver -> supervisor)',
-    params = {
-        { name = 'serverId', help = 'Server ID target', type = 'playerId' },
-    },
-}, function(source, args)
+---Shared handler for /promotelaju and its backward-compatible alias.
+---@param source number
+---@param args table
+local function promoteDriverCommand(source, args)
     local src = source
     if src == 0 then return end
     if isManagerActionSpammy(src) then return end
@@ -622,14 +620,27 @@ lib.addCommand('promoteojol', {
 
     notify(src, ('Driver berhasil dipromosikan ke %s.'):format(newRank), 'success')
     notify(targetSrc, ('Rank LAJU kamu naik ke %s.'):format(newRank), 'success')
-end)
+end
 
-lib.addCommand('demoteojol', {
-    help = 'CEO LAJU: turunkan rank Mitra LAJU (supervisor -> senior_driver -> driver)',
+lib.addCommand('promotelaju', {
+    help = 'CEO LAJU: naikkan rank Mitra LAJU (driver -> senior_driver -> supervisor)',
     params = {
         { name = 'serverId', help = 'Server ID target', type = 'playerId' },
     },
-}, function(source, args)
+}, promoteDriverCommand)
+
+-- Backward-compatible alias: the exact same handler as /promotelaju.
+lib.addCommand('promoteojol', {
+    help = 'Alias of /promotelaju',
+    params = {
+        { name = 'serverId', help = 'Server ID target', type = 'playerId' },
+    },
+}, promoteDriverCommand)
+
+---Shared handler for /demotelaju and its backward-compatible alias.
+---@param source number
+---@param args table
+local function demoteDriverCommand(source, args)
     local src = source
     if src == 0 then return end
     if isManagerActionSpammy(src) then return end
@@ -666,7 +677,22 @@ lib.addCommand('demoteojol', {
 
     notify(src, ('Driver berhasil diturunkan ke %s.'):format(newRank), 'success')
     notify(targetSrc, ('Rank LAJU kamu turun ke %s.'):format(newRank), 'error')
-end)
+end
+
+lib.addCommand('demotelaju', {
+    help = 'CEO LAJU: turunkan rank Mitra LAJU (supervisor -> senior_driver -> driver)',
+    params = {
+        { name = 'serverId', help = 'Server ID target', type = 'playerId' },
+    },
+}, demoteDriverCommand)
+
+-- Backward-compatible alias: the exact same handler as /demotelaju.
+lib.addCommand('demoteojol', {
+    help = 'Alias of /demotelaju',
+    params = {
+        { name = 'serverId', help = 'Server ID target', type = 'playerId' },
+    },
+}, demoteDriverCommand)
 
 -- Admin job-management API ----------------------------------------------------
 -- The implementation lives in server/adminapi.lua (trusted server-only, called by
