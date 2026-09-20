@@ -214,10 +214,14 @@ function App() {
   return (
     <div style={styles.container}>
       <div style={styles.app}>
-        <div style={styles.brandBar} />
-        <div style={styles.eyebrow}>LIFESTATE</div>
-        <div style={styles.title}>APP STORE</div>
-        <div style={styles.subtitle}>Aplikasi resmi untuk HP kamu</div>
+        {!selectedEntry && (
+          <>
+            <div style={styles.brandBar} />
+            <div style={styles.eyebrow}>LIFESTATE</div>
+            <div style={styles.title}>APP STORE</div>
+            <div style={styles.subtitle}>Aplikasi resmi untuk HP kamu</div>
+          </>
+        )}
 
         {loading && !apps && <div style={styles.hint}>Memuat...</div>}
 
@@ -271,7 +275,7 @@ const styles = {
     width: '100%',
     maxWidth: '380px',
     boxSizing: 'border-box',
-    padding: '8px 20px 24px',
+    padding: '8px 10px 24px',
   },
   brandBar: {
     width: '28px',
@@ -313,7 +317,7 @@ const styles = {
     gap: '14px',
     width: '100%',
     boxSizing: 'border-box',
-    padding: '13px 4px',
+    padding: '12px 2px',
     background: 'none',
     border: 'none',
     borderBottom: '1px solid #1E232D',

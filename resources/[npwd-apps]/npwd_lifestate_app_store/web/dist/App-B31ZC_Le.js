@@ -259,10 +259,12 @@ function App() {
   const apps = store2 && Array.isArray(store2.apps) ? store2.apps : null;
   const selectedEntry = apps && selected ? apps.find((entry) => entry.id === selected) || null : null;
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.container, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.app, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.brandBar }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.eyebrow, children: "LIFESTATE" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.title, children: "APP STORE" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.subtitle, children: "Aplikasi resmi untuk HP kamu" }),
+    !selectedEntry && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.brandBar }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.eyebrow, children: "LIFESTATE" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.title, children: "APP STORE" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.subtitle, children: "Aplikasi resmi untuk HP kamu" })
+    ] }),
     loading && !apps && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.hint, children: "Memuat..." }),
     !loading && !apps && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.hint, children: "Daftar aplikasi tidak bisa dimuat." }),
@@ -302,7 +304,7 @@ const styles = {
     width: "100%",
     maxWidth: "380px",
     boxSizing: "border-box",
-    padding: "8px 20px 24px"
+    padding: "8px 10px 24px"
   },
   brandBar: {
     width: "28px",
@@ -344,7 +346,7 @@ const styles = {
     gap: "14px",
     width: "100%",
     boxSizing: "border-box",
-    padding: "13px 4px",
+    padding: "12px 2px",
     background: "none",
     border: "none",
     borderBottom: "1px solid #1E232D",
