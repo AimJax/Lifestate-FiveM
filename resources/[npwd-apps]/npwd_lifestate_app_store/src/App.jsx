@@ -270,12 +270,8 @@ const styles = {
   app: {
     width: '100%',
     maxWidth: '380px',
-    background: '#12151C',
-    border: '1px solid #1E232D',
-    borderRadius: '16px',
-    padding: '20px',
     boxSizing: 'border-box',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
+    padding: '8px 20px 24px',
   },
   brandBar: {
     width: '28px',
@@ -300,7 +296,7 @@ const styles = {
     color: '#9AA3AF',
     fontSize: '12px',
     marginTop: '4px',
-    marginBottom: '18px'
+    marginBottom: '22px'
   },
   hint: {
     color: '#9AA3AF',
@@ -372,12 +368,18 @@ const styles = {
     paddingLeft: '4px'
   },
   back: {
+    display: 'flex',
+    alignItems: 'center',
+    width: '100%',
+    boxSizing: 'border-box',
     background: 'none',
     border: 'none',
+    borderBottom: '1px solid #1E232D',
     color: '#9AA3AF',
-    fontSize: '12px',
-    fontWeight: '600',
-    padding: '0 0 14px 0',
+    fontSize: '13px',
+    fontWeight: '700',
+    padding: '10px 4px 14px',
+    marginBottom: '16px',
     cursor: 'pointer',
     font: 'inherit'
   },
@@ -385,7 +387,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
-    marginBottom: '16px'
+    marginBottom: '20px'
   },
   detailIcon: {
     width: '76px',
@@ -422,7 +424,7 @@ const styles = {
     color: '#c9d3cc',
     fontSize: '13px',
     lineHeight: '20px',
-    marginBottom: '16px'
+    marginBottom: '20px'
   },
   detailHint: {
     color: '#6F7885',
