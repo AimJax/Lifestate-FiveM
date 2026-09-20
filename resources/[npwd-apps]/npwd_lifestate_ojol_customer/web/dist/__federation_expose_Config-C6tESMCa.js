@@ -4,11 +4,12 @@ await importShared("react");
 const path = "/npwd_lifestate_ojol_customer";
 const LAJU_STEM = "3,3 8,3 8,15 3,15";
 const LAJU_FOOT = "3,15 13,15 18.5,17.5 13,20 3,20";
+const HOME_VIEWBOX = "-3 -3 30 30";
 const Icon = (props) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
   "svg",
   {
     ...props,
-    viewBox: "0 0 24 24",
+    viewBox: HOME_VIEWBOX,
     fill: "currentColor",
     xmlns: "http://www.w3.org/2000/svg",
     children: [
