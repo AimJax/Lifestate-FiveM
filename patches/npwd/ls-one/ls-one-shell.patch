@@ -1,8 +1,8 @@
 diff --git a/apps/phone/src/Phone.css b/apps/phone/src/Phone.css
-index c2a1ec57..035d3af3 100644
+index c2a1ec57..a78c10fc 100644
 --- a/apps/phone/src/Phone.css
 +++ b/apps/phone/src/Phone.css
-@@ -7,37 +7,78 @@
+@@ -7,43 +7,100 @@
  .Phone {
    position: absolute;
    right: 0;
@@ -91,6 +91,28 @@ index c2a1ec57..035d3af3 100644
    width: 100%;
    display: flex;
    flex-direction: column;
+   position: relative;
+ }
+ 
++/* LS One: the phone behaves like a device, not a webpage - no accidental
++   text highlighting anywhere in the shell or apps. Editable controls opt
++   back into normal text interaction below. */
++.PhoneScreen,
++.PhoneScreen * {
++  user-select: none;
++  -webkit-user-select: none;
++}
++
++.PhoneScreen input,
++.PhoneScreen textarea,
++.PhoneScreen [contenteditable='true'] {
++  user-select: text;
++  -webkit-user-select: text;
++}
++
+ * {
+   box-sizing: border-box;
+ }
 diff --git a/apps/phone/src/apps/home/components/Home.tsx b/apps/phone/src/apps/home/components/Home.tsx
 index 40d749e9..0453f4e5 100644
 --- a/apps/phone/src/apps/home/components/Home.tsx

@@ -170,7 +170,7 @@ function AppList({ apps, onOpen }) {
 }
 function Detail({ entry, busy, onBack, onInstall, onUninstall }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", style: styles.back, onClick: onBack, children: "← Kembali" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", style: styles.back, onClick: onBack, "aria-label": "Kembali", children: /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "#FFFFFF", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("polyline", { points: "15 18 9 12 15 6" }) }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.detailHeader, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "div",
@@ -401,18 +401,13 @@ const styles = {
     paddingLeft: "4px"
   },
   back: {
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
-    width: "100%",
-    boxSizing: "border-box",
     background: "none",
     border: "none",
-    borderBottom: "1px solid #1E232D",
-    color: "#9AA3AF",
-    fontSize: "13px",
-    fontWeight: "700",
-    padding: "10px 4px 14px",
-    marginBottom: "16px",
+    color: "#FFFFFF",
+    padding: "10px 16px 10px 4px",
+    margin: "0 0 4px -4px",
     cursor: "pointer",
     font: "inherit"
   },

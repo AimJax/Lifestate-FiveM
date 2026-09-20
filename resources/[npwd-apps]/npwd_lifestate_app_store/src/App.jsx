@@ -85,8 +85,10 @@ function AppList({ apps, onOpen }) {
 function Detail({ entry, busy, onBack, onInstall, onUninstall }) {
   return (
     <div>
-      <button type="button" style={styles.back} onClick={onBack}>
-        &#8592; Kembali
+      <button type="button" style={styles.back} onClick={onBack} aria-label="Kembali">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
       </button>
 
       <div style={styles.detailHeader}>
@@ -372,18 +374,13 @@ const styles = {
     paddingLeft: '4px'
   },
   back: {
-    display: 'flex',
+    display: 'inline-flex',
     alignItems: 'center',
-    width: '100%',
-    boxSizing: 'border-box',
     background: 'none',
     border: 'none',
-    borderBottom: '1px solid #1E232D',
-    color: '#9AA3AF',
-    fontSize: '13px',
-    fontWeight: '700',
-    padding: '10px 4px 14px',
-    marginBottom: '16px',
+    color: '#FFFFFF',
+    padding: '10px 16px 10px 4px',
+    margin: '0 0 4px -4px',
     cursor: 'pointer',
     font: 'inherit'
   },
