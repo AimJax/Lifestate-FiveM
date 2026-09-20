@@ -502,7 +502,7 @@ function App() {
 
 const styles = {
   container: {
-    background: '#0f1512',
+    background: '#101010',
     color: '#ffffff',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     width: '100%',
@@ -518,7 +518,7 @@ const styles = {
   app: {
     width: '100%',
     maxWidth: '380px',
-    background: '#16201b',
+    background: '#171717',
     borderRadius: '16px',
     padding: '24px',
     textAlign: 'center',
@@ -532,7 +532,7 @@ const styles = {
     marginBottom: '4px'
   },
   subtitle: {
-    color: '#7f8c85',
+    color: '#9A9A9A',
     fontSize: '12px',
     textTransform: 'uppercase',
     letterSpacing: '2px',
@@ -546,14 +546,14 @@ const styles = {
     marginBottom: '16px'
   },
   hint: {
-    color: '#8b978f',
+    color: '#9A9A9A',
     fontSize: '12px',
     lineHeight: '1.5',
     marginBottom: '16px'
   },
   driverCard: {
-    background: '#111815',
-    border: '1px solid #24312a',
+    background: '#1E1E1E',
+    border: '1px solid #2E2E2E',
     borderRadius: '12px',
     padding: '16px',
     marginBottom: '14px'
@@ -565,14 +565,14 @@ const styles = {
     objectFit: 'cover',
     display: 'block',
     margin: '0 auto 10px',
-    border: '2px solid #24312a'
+    border: '2px solid #2E2E2E'
   },
   driverPhotoPlaceholder: {
     width: '64px',
     height: '64px',
     borderRadius: '50%',
-    background: '#24312a',
-    color: '#7f8c85',
+    background: '#D71920',
+    color: '#FFFFFF',
     fontSize: '11px',
     fontWeight: '700',
     lineHeight: '64px',
@@ -583,13 +583,13 @@ const styles = {
     fontWeight: '600'
   },
   driverMeta: {
-    color: '#8b978f',
+    color: '#9A9A9A',
     fontSize: '12px',
     marginTop: '4px'
   },
   card: {
-    background: '#111815',
-    border: '1px solid #24312a',
+    background: '#1E1E1E',
+    border: '1px solid #2E2E2E',
     borderRadius: '12px',
     padding: '16px',
     marginBottom: '14px',
@@ -602,7 +602,7 @@ const styles = {
     marginBottom: '6px'
   },
   label: {
-    color: '#8b978f',
+    color: '#9A9A9A',
     fontSize: '12px'
   },
   value: {
@@ -623,7 +623,7 @@ const styles = {
   star: {
     background: 'none',
     border: 'none',
-    color: '#3a463f',
+    color: '#3A3A3A',
     fontSize: '34px',
     lineHeight: '1',
     cursor: 'pointer',
@@ -660,18 +660,18 @@ const styles = {
   },
   paymentOption: {
     flex: 1,
-    background: '#111815',
+    background: '#1E1E1E',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#24312a',
+    borderColor: '#2E2E2E',
     borderRadius: '10px',
     padding: '12px',
     color: '#ffffff',
     cursor: 'pointer'
   },
   paymentOptionActive: {
-    borderColor: '#22c55e',
-    background: '#16241c'
+    borderColor: '#D71920',
+    background: '#241414'
   },
   paymentLabel: {
     fontSize: '12px',
@@ -679,7 +679,7 @@ const styles = {
     letterSpacing: '1px'
   },
   paymentBalance: {
-    color: '#8b978f',
+    color: '#9A9A9A',
     fontSize: '11px',
     marginTop: '4px'
   },
@@ -705,7 +705,7 @@ const styles = {
     color: '#FFFFFF'
   },
   secondaryButton: {
-    background: '#24312a',
+    background: '#2E2E2E',
     color: '#ffffff'
   },
   dangerButton: {

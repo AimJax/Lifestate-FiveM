@@ -1,5 +1,5 @@
 import { importShared } from "./__federation_fn_import-eda1j03z.js";
-import { A as App, j as jsxRuntimeExports } from "./App-DD8R578c.js";
+import { A as App, j as jsxRuntimeExports } from "./App-CdoAK7KA.js";
 await importShared("react");
 const path = "/npwd_lifestate_ojol_customer";
 const LAJU_STEM = "3,3 8,3 8,15 3,15";
