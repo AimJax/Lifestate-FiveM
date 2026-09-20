@@ -88,11 +88,27 @@ $changedFiles = @(git -C $WorkDir status --short | ForEach-Object {
 $missing = @($patchedFiles | Where-Object { $changedFiles -notcontains $_ })
 if ($missing.Count -gt 0) { Fail ('patch applied but missing changes in: ' + ($missing -join ', ')) }
 
-# 3. Dependencies + build ------------------------------------------------------
+# 3. LS One binary assets -------------------------------------------------------
+# Tracked binaries (patches/npwd/ls-one/assets/) are copied into the vendor
+# tree BEFORE any build runs, so a clean build always ships them inside dist
+# (a unified diff cannot carry binary files).
+$lsOneAssets = Join-Path $PatchDir 'assets'
+if (Test-Path -LiteralPath $lsOneAssets) {
+  # NOTE: -Path (not -LiteralPath) so the '*' wildcard expands.
+  Copy-Item -Path (Join-Path $lsOneAssets '*') -Destination (Join-Path $WorkDir 'apps\phone\public\media\backgrounds') -Force
+  Step 'LS One assets staged into vendor tree'
+}
+
+# 4. Dependencies + build ------------------------------------------------------
 Push-Location -LiteralPath $WorkDir
 try {
   if (-not $SkipInstall) {
     Step 'pnpm install'
+    # Two-pass install: the first pass lays packages down (postinstall scripts
+    # stay ignored), approval records which scripts may run, and the second
+    # pass executes them. A single approve-then-install is NOT sufficient on a
+    # fresh tree.
+    pnpm install 2>&1 | Out-Null
     pnpm approve-builds esbuild core-js core-js-pure '@sentry/cli' '@swc/core' 2>&1 | Out-Null
     pnpm install 2>&1 | Out-Null
   }
@@ -117,16 +133,6 @@ try {
 $BuildHtml = Join-Path $WorkDir 'dist\html'
 if (-not (Test-Path -LiteralPath (Join-Path $BuildHtml 'index.html'))) { Fail 'build output missing dist/html' }
 
-# 4. LS One binary assets ------------------------------------------------------
-# Tracked binaries (patches/npwd/ls-one/assets/) are copied into the vendor
-# tree BEFORE the build so they ship inside dist (a unified diff cannot carry
-# binary files).
-$lsOneAssets = Join-Path $PatchDir 'assets'
-if (Test-Path -LiteralPath $lsOneAssets) {
-  Copy-Item -LiteralPath (Join-Path $lsOneAssets '*') -Destination (Join-Path $WorkDir 'apps\phone\public\media\backgrounds') -Force
-  Step 'LS One assets staged into vendor tree'
-}
-
 # 5. Production bundle patches -------------------------------------------------
 function Assert-Replace($file, $old, $new, $label) {
   $t = Get-Content -LiteralPath $file -Raw
@@ -141,7 +147,7 @@ $indexBundle = Get-ChildItem -LiteralPath (Join-Path $BuildHtml 'assets') -Filte
 if (-not $indexBundle) { Fail 'index bundle not found in fresh build' }
 
 Step 're-applying disabledApps bundle patch'
-Assert-Replace $indexBundle 'i=Hg().iconSet.value,t=g6(()=>Tle.map(s=>{' 'i=Hg().iconSet.value,npwdDis=Ve(xi.resourceConfig)?.disabledApps||[],t=g6(()=>Tle.map(s=>{' 'disabledApps/fragment-1'
+Assert-Replace $indexBundle 'i=Hg().iconSet.value,t=f6(()=>Ale.map(s=>{' 'i=Hg().iconSet.value,npwdDis=Ve(xi.resourceConfig)?.disabledApps||[],t=f6(()=>Ale.map(s=>{' 'disabledApps/fragment-1'
 Assert-Replace $indexBundle 'isDisabled:s.disable}:{' 'isDisabled:s.disable||npwdDis.includes(s.id)}:{' 'disabledApps/fragment-2'
 Assert-Replace $indexBundle 'isDisabled:s.disable}}),[e,i,a])' 'isDisabled:s.disable||npwdDis.includes(s.id)}}),[e,i,a,npwdDis])' 'disabledApps/fragment-3'
 
@@ -193,6 +199,10 @@ if (-not ($jsText.Contains('npwdDis=') -and $jsText.Contains('disabledApps||')))
 if (-not (Test-Path -LiteralPath (Join-Path $LiveHtml "assets\$backfixName"))) { $failedChecks.Add('goBack backfix chunk') }
 $liveGameText = Get-Content -LiteralPath (Join-Path $RepoRoot 'resources\[npwd]\npwd\dist\game\client\client.js') -Raw
 if (-not $liveGameText.Contains('npwd:getEnvironment')) { $failedChecks.Add('game environment bridge') }
+$builtWallpaper = Join-Path $BuildHtml 'media\backgrounds\lsone.png'
+if (-not (Test-Path -LiteralPath $builtWallpaper)) { $failedChecks.Add('built wallpaper asset') }
+$liveWallpaper = Join-Path $LiveHtml 'media\backgrounds\lsone.png'
+if (-not (Test-Path -LiteralPath $liveWallpaper)) { $failedChecks.Add('deployed wallpaper asset') }
 $staleRef = Get-ChildItem -LiteralPath $LiveHtml -Recurse -File |
   Select-String -Pattern 'react-router-dom-770100b8' | Select-Object -First 1
 if ($staleRef) { $failedChecks.Add(('stale router ref: ' + $staleRef.Path)) }

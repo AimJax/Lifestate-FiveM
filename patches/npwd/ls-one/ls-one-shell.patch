@@ -1,9 +1,9 @@
 diff --git a/apps/game/client/cl_environment.ts b/apps/game/client/cl_environment.ts
 new file mode 100644
-index 00000000..c108e1d5
+index 00000000..29c35448
 --- /dev/null
 +++ b/apps/game/client/cl_environment.ts
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,94 @@
 +import { RegisterNuiCB } from './cl_utils';
 +
 +// Read-only environment bridge for the LS One home-screen widget.
@@ -88,15 +88,14 @@ index 00000000..c108e1d5
 +}
 +
 +RegisterNuiCB('npwd:getEnvironment', (_, cb) => {
++  // Environment only: weather + temperature estimate. The hero clock reads
++  // NPWD's canonical phone-time store in the UI, so this payload carries no
++  // clock fields that could drift against the status bar.
 +  const weather = resolveWeather(GetPrevWeatherType());
-+  const hour = GetClockHours();
-+  const minute = GetClockMinutes();
 +  cb({
 +    weather,
 +    label: WEATHER_LABEL[weather] ?? weather,
-+    tempC: estimateTempC(weather, hour),
-+    hour,
-+    minute,
++    tempC: estimateTempC(weather, GetClockHours()),
 +  });
 +});
 diff --git a/apps/game/client/client.ts b/apps/game/client/client.ts
@@ -227,10 +226,10 @@ index c2a1ec57..a78c10fc 100644
    box-sizing: border-box;
  }
 diff --git a/apps/phone/src/apps/home/components/Home.tsx b/apps/phone/src/apps/home/components/Home.tsx
-index 40d749e9..404b1bd3 100644
+index 40d749e9..cb492695 100644
 --- a/apps/phone/src/apps/home/components/Home.tsx
 +++ b/apps/phone/src/apps/home/components/Home.tsx
-@@ -1,33 +1,140 @@
+@@ -1,33 +1,139 @@
 -import React from 'react';
 +import React, { useEffect, useState } from 'react';
  import { AppWrapper } from '@ui/components';
@@ -242,6 +241,7 @@ index 40d749e9..404b1bd3 100644
  import { useApps } from '@os/apps/hooks/useApps';
  import { useExternalApps } from '@common/hooks/useExternalApps';
 +import { IApp } from '@os/apps/config/apps';
++import usePhoneTime from '@os/phone/hooks/usePhoneTime';
 +import fetchNui from '@utils/fetchNui';
 +
 +// LS One dock: exactly these core apps live in the hotbar, in this order.
@@ -251,16 +251,14 @@ index 40d749e9..404b1bd3 100644
 +interface EnvState {
 +  label: string;
 +  tempC: number;
-+  hour: number;
-+  minute: number;
 +}
 +
-+const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-+
-+// LS One home widget: live game clock + live game weather + estimated
-+// temperature, refreshed every minute. Rendered only once real data arrives
-+// so the home screen never shows placeholder values.
++// LS One home widget: the hero clock reads the SAME recoil time source as
++// the status bar, so both always agree. Weather/temp come from the read-only
++// game bridge, refreshed every minute. Nothing renders until real data
++// arrives, so the home screen never shows placeholder values.
 +const HomeWidget: React.FC = () => {
++  const phoneTime = usePhoneTime();
 +  const [env, setEnv] = useState<EnvState | null>(null);
 +
 +  useEffect(() => {
@@ -280,12 +278,12 @@ index 40d749e9..404b1bd3 100644
 +    };
 +  }, []);
 +
-+  if (!env) return null;
++  if (!phoneTime || !env) return null;
 +
 +  return (
 +    <Box sx={{ padding: '6px 8px 0', marginTop: '40px', textAlign: 'center' }}>
 +      <Box sx={{ color: '#F5F7FA', fontSize: '44px', fontWeight: 700, letterSpacing: '1px', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
-+        {pad2(env.hour)}:{pad2(env.minute)}
++        {phoneTime}
 +      </Box>
 +      <Box sx={{ color: '#9AA3AF', fontSize: '12px', fontWeight: 600, marginTop: '4px' }}>
 +        {env.label} &middot; {env.tempC}&deg;C

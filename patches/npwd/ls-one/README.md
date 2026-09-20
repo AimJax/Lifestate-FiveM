@@ -61,11 +61,12 @@ alternate locations (the override path is used as given):
 4. applies `ls-one-shell.patch` (aborts unless every file in the patch shows
    the change),
 5. stages tracked binary assets (`assets/` → vendor `public/media/`) — a
-   unified diff cannot carry binaries,
-5. `pnpm install` (approves only the postinstalls the build needs),
-6. builds `@npwd/keyos`, `@npwd/nui` (`vite build --mode game`) and the game
+   unified diff cannot carry binaries — BEFORE any build runs, so even a
+   clean build ships them,
+6. `pnpm install` (approves only the postinstalls the build needs),
+7. builds `@npwd/keyos`, `@npwd/nui` (`vite build --mode game`) and the game
    bridge (`node ./scripts/build.js` in `apps/game`),
-7. re-applies the production bundle patches onto the fresh build and
+8. re-applies the production bundle patches onto the fresh build and
    verifies each replacement occurs exactly once:
    - `disabledApps` support (see `../index-ebf41f23.js.patch`; the app-array
      identifier differs per build — the script asserts the fragments it
@@ -73,12 +74,12 @@ alternate locations (the override path is used as given):
    - goBack route-aware fallback + chunk rename to
      `__federation_shared_react-router-dom-lifestate-backfix.js` with all
      references updated (see `../goBack-fallback.patch`),
-8. replaces `resources/[npwd]/npwd/dist/html` with the fresh output
+9. replaces `resources/[npwd]/npwd/dist/html` with the fresh output
    (`dist/game` server code is never touched) and deploys ONLY the rebuilt
    game `client/client.js` (carries the read-only environment callback;
    `server.js`/`cl_controls.lua` are untouched by LS One),
-9. verifies the LS One markers + both production patches in the deployed
-   bundle.
+10. verifies the LS One markers, both production patches, the game bridge,
+    and the built + deployed `lsone.png` wallpaper asset in the bundles.
 
 The script never touches server-side NPWD state, app IDs, the database, or
 federation configuration beyond the documented chunk rename.
