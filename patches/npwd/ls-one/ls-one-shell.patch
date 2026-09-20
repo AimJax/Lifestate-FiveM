@@ -1,5 +1,5 @@
 diff --git a/apps/phone/src/Phone.css b/apps/phone/src/Phone.css
-index c2a1ec57..79db026c 100644
+index c2a1ec57..035d3af3 100644
 --- a/apps/phone/src/Phone.css
 +++ b/apps/phone/src/Phone.css
 @@ -7,37 +7,78 @@
@@ -27,12 +27,12 @@ index c2a1ec57..79db026c 100644
 +  background-repeat: no-repeat;
 +  background-position: calc(100% - 1px) 190px;
 +  background-color: transparent;
-+  border-radius: 54px;
++  border-radius: 52px;
 +  border: 2px solid #282B31;
 +  box-shadow:
-+    inset 0 0 0 7px #111317,
-+    inset 0 0 0 8px #282B31,
-+    inset 0 0 0 15px #08090B,
++    inset 0 0 0 5px #111317,
++    inset 0 0 0 6px #282B31,
++    inset 0 0 0 11px #08090B,
 +    0 24px 80px rgba(0, 0, 0, 0.55);
 +}
 +
@@ -41,7 +41,7 @@ index c2a1ec57..79db026c 100644
 +.PhoneFrame::before {
 +  content: '';
 +  position: absolute;
-+  top: 24px;
++  top: 26px;
 +  left: 50%;
 +  width: 10px;
 +  height: 10px;
@@ -105,7 +105,7 @@ index 40d749e9..0453f4e5 100644
        </Box>
  
 diff --git a/apps/phone/src/os/navigation-bar/components/Navigation.tsx b/apps/phone/src/os/navigation-bar/components/Navigation.tsx
-index ef3d27c1..c13025fb 100644
+index ef3d27c1..0b6f559e 100644
 --- a/apps/phone/src/os/navigation-bar/components/Navigation.tsx
 +++ b/apps/phone/src/os/navigation-bar/components/Navigation.tsx
 @@ -1,35 +1,24 @@
@@ -145,7 +145,7 @@ index ef3d27c1..c13025fb 100644
 -      </div>
 +    /* LS One gesture bar: one floating pill, no bar background, no legacy
 +       buttons. Overlays the content safe-area; pointer events only on it. */
-+    <div className="absolute bottom-4 left-0 right-0 z-50 flex justify-center pointer-events-none">
++    <div className="absolute bottom-5 left-0 right-0 z-50 flex justify-center pointer-events-none">
 +      <button onClick={handleGoToMenu} aria-label="Home" className="pointer-events-auto px-6 py-2">
 +        <span className="block h-[5px] w-24 rounded-full bg-white/85" />
 +      </button>
@@ -153,18 +153,20 @@ index ef3d27c1..c13025fb 100644
    );
  };
 diff --git a/apps/phone/src/os/new-notifications/components/NotificationBar.tsx b/apps/phone/src/os/new-notifications/components/NotificationBar.tsx
-index f8abbec5..551de1fb 100644
+index f8abbec5..5a603a87 100644
 --- a/apps/phone/src/os/new-notifications/components/NotificationBar.tsx
 +++ b/apps/phone/src/os/new-notifications/components/NotificationBar.tsx
-@@ -34,13 +34,15 @@ import {cn} from "@utils/css";
+@@ -34,13 +34,18 @@ import {cn} from "@utils/css";
  
  const useStyles = makeStyles((theme) => ({
    root: {
 -    backgroundColor: theme.palette.background.default,
+-    height: '30px',
 +    /* LS One: transparent status bar integrated into the display instead of
-+       a separate dark slab; the notification drawer below keeps its surface. */
++       a separate dark slab; contents sit ~5px lower for a balanced top area.
++       The notification drawer below keeps its surface. */
 +    backgroundColor: 'transparent',
-     height: '30px',
++    height: '35px',
      width: '100%',
      color: theme.palette.text.primary,
      zIndex: 99,
@@ -172,10 +174,21 @@ index f8abbec5..551de1fb 100644
 -    paddingRight: '15px',
 +    paddingLeft: '20px',
 +    paddingRight: '20px',
++    paddingTop: '4px',
++    boxSizing: 'border-box',
      position: 'relative',
      '&:hover': {
        cursor: 'pointer',
-@@ -142,21 +144,25 @@ export const NotificationBar = () => {
+@@ -62,7 +67,7 @@ const useStyles = makeStyles((theme) => ({
+     backgroundColor: theme.palette.background.default,
+     width: '100%',
+     position: 'absolute',
+-    top: '30px',
++    top: '35px',
+     zIndex: 98,
+   },
+   closeNotifBtn: {
+@@ -142,21 +147,25 @@ export const NotificationBar = () => {
            setBarUncollapsed((curr) => !curr);
          }}
        >
