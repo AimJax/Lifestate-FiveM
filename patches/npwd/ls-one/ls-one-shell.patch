@@ -225,6 +225,153 @@ index c2a1ec57..a78c10fc 100644
  * {
    box-sizing: border-box;
  }
+diff --git a/apps/phone/src/apps/calculator/components/Calculator.tsx b/apps/phone/src/apps/calculator/components/Calculator.tsx
+index dd1a8c1f..908e734e 100644
+--- a/apps/phone/src/apps/calculator/components/Calculator.tsx
++++ b/apps/phone/src/apps/calculator/components/Calculator.tsx
+@@ -25,6 +25,9 @@ const StyledResultWrapper = styled(Box)<{ length: number }>(({ theme, length })
+   overflow: 'hidden',
+   textOverflow: 'ellipsis',
+   position: 'relative',
++  backgroundColor: 'transparent',
++  color: '#FFFFFF',
++  paddingRight: theme.spacing(2),
+ }));
+ 
+ const StyledCalcBtn = styled(CalculatorButton)(({ theme }) => ({
+diff --git a/apps/phone/src/apps/calculator/components/CalculatorApp.tsx b/apps/phone/src/apps/calculator/components/CalculatorApp.tsx
+index 11224c11..5b280171 100644
+--- a/apps/phone/src/apps/calculator/components/CalculatorApp.tsx
++++ b/apps/phone/src/apps/calculator/components/CalculatorApp.tsx
+@@ -1,15 +1,13 @@
+ import React from 'react';
+ import { AppWrapper } from '@ui/components';
+-import { AppTitle } from '@ui/components/AppTitle';
++import { LsOneHeader } from '@ui/components/LsOneHeader';
+ import { AppContent } from '@ui/components/AppContent';
+ import { Calculator } from './Calculator';
+-import { useApp } from '@os/apps/hooks/useApps';
+ 
+ export const CalculatorApp: React.FC = () => {
+-  const calculator = useApp('CALCULATOR');
+   return (
+     <AppWrapper>
+-      <AppTitle app={calculator} />
++      <LsOneHeader title="Kalkulator" />
+       <AppContent>
+         <Calculator />
+       </AppContent>
+diff --git a/apps/phone/src/apps/calculator/components/CalculatorButton.tsx b/apps/phone/src/apps/calculator/components/CalculatorButton.tsx
+index 2c874cb8..415b2dbd 100644
+--- a/apps/phone/src/apps/calculator/components/CalculatorButton.tsx
++++ b/apps/phone/src/apps/calculator/components/CalculatorButton.tsx
+@@ -7,6 +7,23 @@ interface ButtonOptions {
+   label: string;
+ }
+ 
++export type CalcKeyTone = 'num' | 'op' | 'eq' | 'clear';
++
++const TONE_SX: Record<CalcKeyTone, { backgroundColor: string; color: string }> = {
++  num: { backgroundColor: '#1E232D', color: '#FFFFFF' },
++  op: { backgroundColor: '#292F3A', color: '#FFFFFF' },
++  eq: { backgroundColor: '#D71920', color: '#FFFFFF' },
++  clear: { backgroundColor: 'transparent', color: '#6F7885' },
++};
++
++export const toneOfLabel = (label: string | number): CalcKeyTone => {
++  if (label === '=') return 'eq';
++  if (label === 'C' || label === 'AC') return 'clear';
++  if (label === '/' || label === '*' || label === '-' || label === '+' || label === '.')
++    return 'op';
++  return 'num';
++};
++
+ interface CalculatorButtonProps extends HTMLAttributes<HTMLButtonElement> {
+   GridProps?: GridProps;
+   buttonOpts: ButtonOptions;
+@@ -23,7 +40,8 @@ export const CalculatorButton: React.FC<CalculatorButtonProps> = ({
+       className={className}
+       onClick={buttonOpts.onClick}
+       sx={{
+-        color: 'white',
++        ...TONE_SX[toneOfLabel(buttonOpts.label)],
++        borderRadius: '14px',
+       }}
+     >
+       {buttonOpts.label}
+diff --git a/apps/phone/src/apps/contacts/components/List/ContactList.tsx b/apps/phone/src/apps/contacts/components/List/ContactList.tsx
+index 3f82a677..b8ee0b27 100644
+--- a/apps/phone/src/apps/contacts/components/List/ContactList.tsx
++++ b/apps/phone/src/apps/contacts/components/List/ContactList.tsx
+@@ -42,7 +42,7 @@ export const ContactList: React.FC = () => {
+           <SearchContacts />
+           <NPWDButton
+             size="icon"
+-            className="rounded-full p-2 text-neutral-900"
++            className="rounded-full p-2.5 text-white bg-[#D71920] hover:brightness-110"
+             variant="ghost"
+             onClick={() => history.push('/contacts/-1')}
+           >
+@@ -63,7 +63,7 @@ export const ContactList: React.FC = () => {
+             .sort()
+             .map((letter) => (
+               <div key={letter} className="relative">
+-                <div className="sticky top-0 z-10 rounded-xl border-b border-t border-gray-200 bg-neutral-50 px-6 py-1 text-sm font-medium text-gray-500 dark:border-none dark:bg-neutral-800">
++                <div className="sticky top-0 z-10 rounded-xl border border-[#292F3A] bg-[#181C24] px-6 py-1 text-sm font-medium text-[#9AA3AF]">
+                   <h3>{letter}</h3>
+                 </div>
+                 <List>
+@@ -110,7 +110,7 @@ const SelfContact = ({number, avatar}: {number: string, avatar:string}) => {
+             {avatar && avatar.length > 0 ? (
+               <img src={avatar} className="inline-block h-10 w-10 rounded-full" alt={'avatar'} />
+             ) : (
+-              <div className="flex h-10 w-10 items-center justify-center rounded-full">
++              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1E232D] border border-[#292F3A]">
+                 <span className="text-gray-600 dark:text-gray-300">Me</span>
+               </div>
+             )}
+@@ -199,7 +199,7 @@ const ContactItem = ({ number, avatar, id, display }: ContactItemProps) => {
+             {avatar && avatar.length > 0 ? (
+               <img src={avatar} className="inline-block h-10 w-10 rounded-full" alt={'avatar'} />
+             ) : (
+-              <div className="flex h-10 w-10 items-center justify-center rounded-full">
++              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1E232D] border border-[#292F3A]">
+                 <span className="text-gray-600 dark:text-gray-300">{initials(display)}</span>
+               </div>
+             )}
+diff --git a/apps/phone/src/apps/contacts/components/List/SearchContacts.tsx b/apps/phone/src/apps/contacts/components/List/SearchContacts.tsx
+index d7b343ed..b6012baa 100644
+--- a/apps/phone/src/apps/contacts/components/List/SearchContacts.tsx
++++ b/apps/phone/src/apps/contacts/components/List/SearchContacts.tsx
+@@ -20,8 +20,8 @@ export const SearchContacts: React.FC = () => {
+ 
+     return (
+         <div className="w-full py-2">
+-            <div className="flex items-center justify-start bg-neutral-200 dark:bg-neutral-800 rounded-md px-2 space-x-2 border dark:border-neutral-700">
+-                <Search className="h-5 w-5 dark:text-neutral-400"/>
++            <div className="flex items-center justify-start bg-[#181C24] rounded-[10px] px-3 space-x-2 border border-[#292F3A]">
++                <Search className="h-5 w-5 text-[#6F7885]"/>
+                 <NPWDInput
+                     className="group-focus:ring-2"
+                     onChange={(e) => setInputVal(e.target.value)}
+diff --git a/apps/phone/src/apps/contacts/components/views/ContactsPage.tsx b/apps/phone/src/apps/contacts/components/views/ContactsPage.tsx
+index 35608ba2..1f967f7d 100644
+--- a/apps/phone/src/apps/contacts/components/views/ContactsPage.tsx
++++ b/apps/phone/src/apps/contacts/components/views/ContactsPage.tsx
+@@ -1,9 +1,13 @@
+ import React from 'react';
++import { Box } from '@mui/material';
++import { LsOneHeader } from '@ui/components/LsOneHeader';
+ import { ContactList } from '../List/ContactList';
+ 
+ export const ContactPage: React.FC = () => {
+   return (
+     <div className="">
++      <LsOneHeader title="Kontak" />
++      <Box sx={{ height: '8px' }} />
+       <ContactList />
+     </div>
+   );
 diff --git a/apps/phone/src/apps/dialer/components/DialPadGrid.tsx b/apps/phone/src/apps/dialer/components/DialPadGrid.tsx
 index 1628d816..ef08002c 100644
 --- a/apps/phone/src/apps/dialer/components/DialPadGrid.tsx
@@ -792,6 +939,281 @@ index 40d749e9..cb492695 100644
      </AppWrapper>
    );
  };
+diff --git a/apps/phone/src/apps/messages/components/MessagesApp.tsx b/apps/phone/src/apps/messages/components/MessagesApp.tsx
+index f2958b07..256491b0 100644
+--- a/apps/phone/src/apps/messages/components/MessagesApp.tsx
++++ b/apps/phone/src/apps/messages/components/MessagesApp.tsx
+@@ -1,8 +1,7 @@
+ import React from 'react';
+ import {AppWrapper} from '@ui/components';
+-import {AppTitle} from '@ui/components/AppTitle';
++import {LsOneHeader} from '@ui/components/LsOneHeader';
+ import {AppContent} from '@ui/components/AppContent';
+-import {useApp} from '@os/apps/hooks/useApps';
+ import MessageGroupModal from './modal/MessageGroupModal';
+ import MessagesList from './list/MessagesList';
+ import {Route, Switch, useHistory, useLocation} from 'react-router-dom';
+@@ -13,7 +12,6 @@ import {LoadingSpinner} from '@ui/components/LoadingSpinner';
+ import {WordFilterProvider} from '@os/wordfilter/providers/WordFilterProvider';
+ 
+ export const MessagesApp = () => {
+-    const messages = useApp('MESSAGES');
+     const history = useHistory();
+     const {pathname} = useLocation();
+ 
+@@ -21,7 +19,7 @@ export const MessagesApp = () => {
+         <MessagesThemeProvider>
+             <AppWrapper id="messages-app">
+                 <WordFilterProvider>
+-                    {pathname === '/messages' && <AppTitle app={messages}/>}
++                    {pathname === '/messages' && <LsOneHeader title="Messages" />}
+                     <AppContent>
+                         <React.Suspense fallback={<LoadingSpinner/>}>
+                             <Switch>
+diff --git a/apps/phone/src/apps/messages/components/form/NewMessageGroupButton.tsx b/apps/phone/src/apps/messages/components/form/NewMessageGroupButton.tsx
+index 54b923db..15c7bd33 100644
+--- a/apps/phone/src/apps/messages/components/form/NewMessageGroupButton.tsx
++++ b/apps/phone/src/apps/messages/components/form/NewMessageGroupButton.tsx
+@@ -30,7 +30,7 @@ export const NewMessageGroupButton: React.FC<NewMessageGroupButtonProps> = ({ on
+ 
+   return (
+     <button
+-      className="absolute bottom-10 right-5 flex items-center justify-center rounded-md p-2 bg-green-500 text-white hover:bg-green-600"
++      className="absolute bottom-16 right-5 flex items-center justify-center rounded-full p-3.5 bg-[#D71920] text-white hover:brightness-110"
+       color="primary"
+       onClick={!isEditing ? onClick : handleDeleteConversations}
+       onMouseUp={() => {
+diff --git a/apps/phone/src/apps/messages/components/list/MessagesList.tsx b/apps/phone/src/apps/messages/components/list/MessagesList.tsx
+index 8b79f03a..3a8b3d96 100644
+--- a/apps/phone/src/apps/messages/components/list/MessagesList.tsx
++++ b/apps/phone/src/apps/messages/components/list/MessagesList.tsx
+@@ -15,7 +15,7 @@ import {
+ import {useDebounce} from '@os/phone/hooks/useDebounce';
+ import EditIcon from '@mui/icons-material/Edit';
+ import {useMessageAPI} from '../../hooks/useMessageAPI';
+-import {Search} from "lucide-react";
++import {Search, MessageSquare} from "lucide-react";
+ import {NPWDInput} from "@ui/components";
+ import { List } from '@npwd/keyos';
+ 
+@@ -41,7 +41,41 @@ const MessagesList = (): any => {
+         setFilterVal(debouncedVal);
+     }, [debouncedVal, setFilterVal]);
+ 
+-    if (!conversations) return <p>No messages</p>;
++    if (!conversations) {
++      return (
++        <Box
++          display="flex"
++          flexDirection="column"
++          justifyContent="center"
++          alignItems="center"
++          paddingTop={10}
++          textAlign="center"
++        >
++          <Box
++            sx={{
++              width: '64px',
++              height: '64px',
++              borderRadius: '18px',
++              backgroundColor: '#181C24',
++              border: '1px solid #292F3A',
++              display: 'flex',
++              alignItems: 'center',
++              justifyContent: 'center',
++              marginBottom: '16px',
++              color: '#6F7885',
++            }}
++          >
++            <MessageSquare size={28} />
++          </Box>
++          <Box sx={{ color: '#FFFFFF', fontSize: '16px', fontWeight: 700 }}>
++            Belum ada pesan
++          </Box>
++          <Box sx={{ color: '#9AA3AF', fontSize: '12px', marginTop: '6px' }}>
++            Percakapan kamu akan muncul di sini.
++          </Box>
++        </Box>
++      );
++    }
+ 
+     const handleClick = (conversation: MessageConversation) => () => {
+         setMessageRead(conversation.id);
+@@ -77,8 +111,8 @@ const MessagesList = (): any => {
+ 
+             <div className="w-full py-2 px-4">
+                 <div
+-                    className="flex items-center justify-start bg-neutral-200 dark:bg-neutral-800 rounded-md px-2 space-x-2 border dark:border-neutral-700">
+-                    <Search className="h-5 w-5 dark:text-neutral-400"/>
++                    className="flex items-center justify-start bg-[#181C24] rounded-[10px] px-3 space-x-2 border border-[#292F3A]">
++                    <Search className="h-5 w-5 text-[#6F7885]"/>
+                     <NPWDInput
+                         className="group-focus:ring-2"
+                         onChange={(e) => setInputVal(e.currentTarget.value)}
+diff --git a/apps/phone/src/apps/notes/NotesApp.tsx b/apps/phone/src/apps/notes/NotesApp.tsx
+index f7a6cb28..6d12e960 100644
+--- a/apps/phone/src/apps/notes/NotesApp.tsx
++++ b/apps/phone/src/apps/notes/NotesApp.tsx
+@@ -1,7 +1,7 @@
+ import React, { useEffect } from 'react';
+ import { AppWrapper } from '@ui/components';
+ import { AppContent } from '@ui/components/AppContent';
+-import { AppTitle } from '@ui/components/AppTitle';
++import { LsOneHeader } from '@ui/components/LsOneHeader';
+ import { useApp } from '@os/apps/hooks/useApps';
+ import NoteList from './list/NoteList';
+ import { NoteModal } from './modal/NoteModal';
+@@ -9,7 +9,6 @@ import { Fab } from '@mui/material';
+ import AddIcon from '@mui/icons-material/Add';
+ import useStyles from './notes.styles';
+ import { NotesThemeProvider } from './providers/NotesThemeProvider';
+-import {NOTES_APP_PRIMARY_COLOR} from "./notes.theme";
+ import { Route } from 'react-router-dom';
+ import { useSetModalVisible, useSetSelectedNote } from './hooks/state';
+ import { LoadingSpinner } from '@ui/components/LoadingSpinner';
+@@ -18,7 +17,6 @@ import { AddNoteExportData } from '@typings/notes';
+ 
+ export const NotesApp: React.FC = () => {
+   const classes = useStyles();
+-  const notesApp = useApp('NOTES');
+   const setSelectedNote = useSetSelectedNote();
+   const setModalVisible = useSetModalVisible();
+ 
+@@ -44,15 +42,19 @@ export const NotesApp: React.FC = () => {
+   return (
+     <NotesThemeProvider>
+       <AppWrapper id="notes-app">
+-        <AppTitle app={notesApp} />
++        <LsOneHeader title="Catatan" />
+         <NoteModal />
+         <AppContent>
+           <React.Suspense fallback={<LoadingSpinner />}>
+             <Route path="/notes" component={NoteList} />
+           </React.Suspense>
+         </AppContent>
+-        <Fab className={classes.absolute} onClick={onClickCreate}>
+-          <AddIcon style={{ color: NOTES_APP_PRIMARY_COLOR}}/>
++        <Fab
++          className={classes.absolute}
++          onClick={onClickCreate}
++          style={{ backgroundColor: '#D71920', color: '#FFFFFF' }}
++        >
++          <AddIcon style={{ color: '#FFFFFF' }} />
+         </Fab>
+       </AppWrapper>
+     </NotesThemeProvider>
+diff --git a/apps/phone/src/apps/notes/list/NoteList.tsx b/apps/phone/src/apps/notes/list/NoteList.tsx
+index ddea4f31..7e3c2ba3 100644
+--- a/apps/phone/src/apps/notes/list/NoteList.tsx
++++ b/apps/phone/src/apps/notes/list/NoteList.tsx
+@@ -1,10 +1,9 @@
+ import React from 'react';
+ import { Box, List, ListItem, ListItemText, Typography } from '@mui/material';
++import { StickyNote } from 'lucide-react';
+ import { useNotesValue, useSetModalVisible } from '../hooks/state';
+ import { useSetSelectedNote } from '../hooks/state';
+ import { NoteItem } from '@typings/notes';
+-import { useTheme } from '@mui/material';
+-import { useTranslation } from 'react-i18next';
+ import { useQueryParams } from '@common/hooks/useQueryParams';
+ import { useHistory } from 'react-router-dom';
+ import { addQueryToLocation } from '@common/utils/addQueryToLocation';
+@@ -14,11 +13,9 @@ import { getLocationFromUrl } from '@common/utils/getLocationFromUrl';
+ const NoteList = () => {
+   const notes = useNotesValue();
+   const setNote = useSetSelectedNote();
+-  const [t] = useTranslation();
+   const setModalVisible = useSetModalVisible();
+   const query = useQueryParams();
+   const history = useHistory();
+-  const phoneTheme = useTheme();
+ 
+   const referal = query.referal && decodeURIComponent(query.referal);
+ 
+@@ -33,16 +30,37 @@ const NoteList = () => {
+ 
+   if (notes && notes.length)
+     return (
+-      <List disablePadding>
++      <List disablePadding sx={{ padding: '4px 20px 0' }}>
+         {notes.map((note) => (
+-          <ListItem key={note.id} button divider onClick={() => handleNoteModal(note)}>
+-            <ListItemText>
+-              {
+-                <Typography style={{ color: phoneTheme.palette.text.primary }}>
+-                  {note.title}
+-                </Typography>
+-              }
+-            </ListItemText>
++          <ListItem
++            key={note.id}
++            button
++            divider
++            onClick={() => handleNoteModal(note)}
++            sx={{
++              borderRadius: '12px',
++              border: '1px solid #292F3A',
++              backgroundColor: '#181C24',
++              marginBottom: '10px',
++              padding: '12px 14px',
++              '& .MuiListItemText-primary': {
++                color: '#FFFFFF',
++                fontSize: '15px',
++                fontWeight: 600,
++              },
++              '& .MuiListItemText-secondary': {
++                color: '#9AA3AF',
++                fontSize: '12px',
++                whiteSpace: 'nowrap',
++                overflow: 'hidden',
++                textOverflow: 'ellipsis',
++              },
++            }}
++          >
++            <ListItemText
++              primary={note.title}
++              secondary={note.content}
++            />
+           </ListItem>
+         ))}
+       </List>
+@@ -55,13 +73,31 @@ const NoteList = () => {
+       alignItems="center"
+       flexDirection="column"
+       height="100%"
++      textAlign="center"
++      paddingTop={10}
++      sx={{ transform: 'translateY(-50px)' }}
+     >
+-      <Typography
+-        color="inherit"
+-        variant="h6"
+-        style={{ fontWeight: 300, color: phoneTheme.palette.text.primary }}
++      <Box
++        sx={{
++          width: '64px',
++          height: '64px',
++          borderRadius: '18px',
++          backgroundColor: '#181C24',
++          border: '1px solid #292F3A',
++          display: 'flex',
++          alignItems: 'center',
++          justifyContent: 'center',
++          marginBottom: '16px',
++          color: '#6F7885',
++        }}
+       >
+-        {t('NOTES.FEEDBACK.NO_NOTES')}
++        <StickyNote size={28} />
++      </Box>
++      <Typography style={{ color: '#FFFFFF', fontSize: '16px', fontWeight: 700 }}>
++        Belum ada catatan
++      </Typography>
++      <Typography style={{ color: '#9AA3AF', fontSize: '12px', marginTop: '6px' }}>
++        Catatan yang kamu buat akan muncul di sini.
+       </Typography>
+     </Box>
+   );
 diff --git a/apps/phone/src/config/default.json b/apps/phone/src/config/default.json
 index 07639e94..ddaf9a40 100644
 --- a/apps/phone/src/config/default.json
@@ -1297,3 +1719,39 @@ index d99e2b3d..6e3c0c55 100644
                    </Link>
                  </Box>
                </Grid>
+diff --git a/apps/phone/src/ui/components/LsOneHeader.tsx b/apps/phone/src/ui/components/LsOneHeader.tsx
+new file mode 100644
+index 00000000..042dd0b7
+--- /dev/null
++++ b/apps/phone/src/ui/components/LsOneHeader.tsx
+@@ -0,0 +1,30 @@
++import React from 'react';
++import { Box } from '@mui/material';
++
++// LS One shared app header: red micro-bar + bold title. Used by built-in
++// system apps so they read as one OS family. Presentation only.
++export const LsOneHeader: React.FC<{ title: string }> = ({ title }) => {
++  return (
++    <Box sx={{ padding: '14px 20px 4px' }}>
++      <Box
++        sx={{
++          width: '28px',
++          height: '3px',
++          borderRadius: '2px',
++          backgroundColor: '#D71920',
++          marginBottom: '8px',
++        }}
++      />
++      <Box
++        sx={{
++          color: '#FFFFFF',
++          fontSize: '20px',
++          fontWeight: 800,
++          letterSpacing: '0.5px',
++        }}
++      >
++        {title}
++      </Box>
++    </Box>
++  );
++};
