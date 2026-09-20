@@ -16,7 +16,9 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$WorkDir = (Join-Path $env:LOCALAPPDATA 'Temp\npwd-lsone-build'),
+  # D:-based default per the permanent project storage rule (C: is critically
+  # low on space). Override with -WorkDir for one-off alternate locations.
+  [string]$WorkDir = 'D:\Build\NPWD\npwd-src',
   [switch]$SkipInstall
 )
 
@@ -24,6 +26,13 @@ $ErrorActionPreference = 'Continue'
 # NOTE: native tools (git/pnpm) write progress to stderr; that must NOT
 # terminate the script. Every step verifies its own outcome explicitly
 # ($LASTEXITCODE, rev-parse, occurrence counts) and calls Fail() on mismatch.
+
+# Process-local temp redirect (C: is critically low on space). Affects this
+# process and its children only; never touches Windows user/system settings.
+$BuildTemp = 'D:\Temp'
+New-Item -ItemType Directory -Force -Path $BuildTemp | Out-Null
+$env:TEMP = $BuildTemp
+$env:TMP = $BuildTemp
 
 $RepoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $PatchDir = $PSScriptRoot

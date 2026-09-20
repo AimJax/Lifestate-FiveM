@@ -38,16 +38,30 @@ Run from the repo root (Windows, PowerShell):
 .\patches\npwd\ls-one\rebuild-lsone.ps1
 ```
 
-The script (no dependency on any Temp leftovers):
+Default workspace (per the permanent storage rule — no substantial build
+data on C:):
 
-1. checks `node`, `pnpm`, `git` are present,
-2. clones the pinned baseline into a fresh work dir (default:
-   `$env:LOCALAPPDATA\Temp\npwd-lsone-build`, override with `-WorkDir`;
+```text
+D:\Build\NPWD\npwd-src
+```
+
+with process-local `TEMP = D:\Temp`, `TMP = D:\Temp`. Override for one-off
+alternate locations (the override path is used as given):
+
+```powershell
+.\patches\npwd\ls-one\rebuild-lsone.ps1 -WorkDir <path>
+```
+
+1. redirects process-local `TEMP`/`TMP` to `D:\Temp` (this process and its
+   children only; Windows user/system settings are never touched),
+2. checks `node`, `pnpm`, `git` are present,
+3. clones the pinned baseline into the work dir (default
+   `D:\Build\NPWD\npwd-src`, override with `-WorkDir`;
    reuses it if it already holds the pinned commit),
-3. applies `ls-one-shell.patch` (aborts unless exactly 4 files change),
-4. `pnpm install` (approves only the postinstalls the build needs),
-5. builds `@npwd/keyos` then `@npwd/nui` (`vite build --mode game`),
-6. re-applies the production bundle patches onto the fresh build and
+4. applies `ls-one-shell.patch` (aborts unless exactly 4 files change),
+5. `pnpm install` (approves only the postinstalls the build needs),
+6. builds `@npwd/keyos` then `@npwd/nui` (`vite build --mode game`),
+7. re-applies the production bundle patches onto the fresh build and
    verifies each replacement occurs exactly once:
    - `disabledApps` support (see `../index-ebf41f23.js.patch`; the app-array
      identifier differs per build — the script asserts the fragments it
@@ -55,9 +69,9 @@ The script (no dependency on any Temp leftovers):
    - goBack route-aware fallback + chunk rename to
      `__federation_shared_react-router-dom-lifestate-backfix.js` with all
      references updated (see `../goBack-fallback.patch`),
-7. replaces `resources/[npwd]/npwd/dist/html` with the fresh output
+8. replaces `resources/[npwd]/npwd/dist/html` with the fresh output
    (`dist/game` server code is never touched),
-8. verifies the LS One markers + both production patches in the deployed
+9. verifies the LS One markers + both production patches in the deployed
    bundle.
 
 The script never touches server-side NPWD state, app IDs, the database, or
