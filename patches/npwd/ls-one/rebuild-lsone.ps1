@@ -20,7 +20,10 @@ param(
   [switch]$SkipInstall
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
+# NOTE: native tools (git/pnpm) write progress to stderr; that must NOT
+# terminate the script. Every step verifies its own outcome explicitly
+# ($LASTEXITCODE, rev-parse, occurrence counts) and calls Fail() on mismatch.
 
 $RepoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $PatchDir = $PSScriptRoot
@@ -53,7 +56,7 @@ if ((Test-Path -LiteralPath (Join-Path $WorkDir '.git')) -and
 
 # 2. LS One source patch ------------------------------------------------------
 Step 'applying LS One source patch'
-git -C $WorkDir checkout -- apps/phone/src/Phone.css apps/phone/src/apps/home/components/Home.tsx apps/phone/src/os/navigation-bar/components/Navigation.tsx apps/phone/src/os/new-notifications/components/NotificationBar.tsx 2>&1 | Out-Null
+git -C $WorkDir checkout -- apps/phone/src/Phone.css apps/phone/src/apps/home/components/Home.tsx apps/phone/src/os/navigation-bar/components/Navigation.tsx apps/phone/src/os/new-notifications/components/NotificationBar.tsx pnpm-workspace.yaml 2>&1 | Out-Null
 git -C $WorkDir apply --check $SourcePatch 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail 'ls-one-shell.patch does not apply cleanly (see patches/npwd/ls-one/README.md)' }
 git -C $WorkDir apply $SourcePatch 2>&1 | Out-Null
