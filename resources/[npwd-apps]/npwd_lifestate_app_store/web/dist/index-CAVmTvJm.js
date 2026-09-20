@@ -1,5 +1,5 @@
 import { importShared } from "./__federation_fn_import-eda1j03z.js";
-import { j as jsxRuntimeExports, A as App } from "./App-SvHWBWXc.js";
+import { j as jsxRuntimeExports, A as App } from "./App-dsz-5phM.js";
 import { r as reactDomExports } from "./index-BFLZ9Byi.js";
 (function polyfill() {
   const relList = document.createElement("link").relList;

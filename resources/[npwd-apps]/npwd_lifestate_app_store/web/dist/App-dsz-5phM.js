@@ -408,6 +408,7 @@ const styles = {
     color: "#FFFFFF",
     padding: "10px 16px 10px 4px",
     margin: "0 0 4px -4px",
+    transform: "translateY(-6px)",
     cursor: "pointer",
     font: "inherit"
   },
