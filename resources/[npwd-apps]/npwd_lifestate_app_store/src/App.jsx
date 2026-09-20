@@ -213,7 +213,9 @@ function App() {
   return (
     <div style={styles.container}>
       <div style={styles.app}>
-        <div style={styles.title}>LIFESTATE APP STORE</div>
+        <div style={styles.brandBar} />
+        <div style={styles.eyebrow}>LIFESTATE</div>
+        <div style={styles.title}>APP STORE</div>
         <div style={styles.subtitle}>Aplikasi resmi untuk HP kamu</div>
 
         {loading && !apps && <div style={styles.hint}>Memuat...</div>}
@@ -251,7 +253,7 @@ function App() {
 
 const styles = {
   container: {
-    background: '#0f1512',
+    background: '#0B0D12',
     color: '#ffffff',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     width: '100%',
@@ -267,31 +269,47 @@ const styles = {
   app: {
     width: '100%',
     maxWidth: '380px',
-    background: '#16201b',
+    background: '#12151C',
+    border: '1px solid #1E232D',
     borderRadius: '16px',
     padding: '20px',
     boxSizing: 'border-box',
     boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
   },
+  brandBar: {
+    width: '28px',
+    height: '3px',
+    borderRadius: '2px',
+    background: '#D71920',
+    marginBottom: '12px'
+  },
+  eyebrow: {
+    color: '#6F7885',
+    fontSize: '11px',
+    fontWeight: '700',
+    letterSpacing: '3px',
+    marginBottom: '2px'
+  },
   title: {
     fontSize: '20px',
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: '1px'
   },
   subtitle: {
-    color: '#8b978f',
+    color: '#9AA3AF',
     fontSize: '12px',
+    marginTop: '4px',
     marginBottom: '18px'
   },
   hint: {
-    color: '#8b978f',
+    color: '#9AA3AF',
     fontSize: '13px',
     marginBottom: '14px'
   },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '10px'
+    gap: '12px'
   },
   tile: {
     position: 'relative',
@@ -299,11 +317,13 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '8px',
-    padding: '12px 6px',
-    background: '#111815',
+    padding: '14px 6px 12px',
+    minHeight: '118px',
+    boxSizing: 'border-box',
+    background: '#181C24',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#24312a',
+    borderColor: '#292F3A',
     borderRadius: '14px',
     cursor: 'pointer',
     color: '#ffffff',
@@ -319,26 +339,27 @@ const styles = {
     color: '#ffffff'
   },
   tileName: {
-    fontSize: '11px',
+    fontSize: '12px',
     fontWeight: '600',
-    lineHeight: '13px',
+    lineHeight: '14px',
     textAlign: 'center',
     wordBreak: 'break-word'
   },
   tileDot: {
     position: 'absolute',
-    top: '8px',
-    right: '8px',
-    width: '12px',
-    height: '12px',
+    top: '10px',
+    right: '10px',
+    width: '10px',
+    height: '10px',
     borderRadius: '6px',
     boxSizing: 'border-box'
   },
   tileDotInstalled: {
-    background: '#22c55e'
+    background: '#22c55e',
+    border: '2px solid #12151C'
   },
   tileDotLocked: {
-    background: '#1b2620',
+    background: '#1E232D',
     border: '1px solid #f59e0b',
     color: '#f59e0b',
     fontSize: '9px',
@@ -351,8 +372,9 @@ const styles = {
   back: {
     background: 'none',
     border: 'none',
-    color: '#8b978f',
+    color: '#9AA3AF',
     fontSize: '12px',
+    fontWeight: '600',
     padding: '0 0 14px 0',
     cursor: 'pointer',
     font: 'inherit'
@@ -360,14 +382,14 @@ const styles = {
   detailHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '14px',
-    marginBottom: '14px'
+    gap: '16px',
+    marginBottom: '16px'
   },
   detailIcon: {
-    width: '68px',
-    height: '68px',
+    width: '76px',
+    height: '76px',
     flexShrink: 0,
-    borderRadius: '18px',
+    borderRadius: '20px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -378,47 +400,58 @@ const styles = {
     minWidth: 0
   },
   detailName: {
-    fontSize: '17px',
-    fontWeight: '700'
+    fontSize: '19px',
+    fontWeight: '800',
+    letterSpacing: '0.5px'
   },
   detailState: {
-    color: '#8b978f',
-    fontSize: '12px',
+    color: '#9AA3AF',
+    fontSize: '11px',
+    fontWeight: '700',
+    letterSpacing: '1px',
+    textTransform: 'uppercase',
     marginTop: '4px'
   },
   detailDescription: {
+    background: '#181C24',
+    border: '1px solid #292F3A',
+    borderRadius: '12px',
+    padding: '14px',
     color: '#c9d3cc',
     fontSize: '13px',
-    lineHeight: '19px',
+    lineHeight: '20px',
     marginBottom: '16px'
   },
   detailHint: {
-    color: '#8b978f',
+    color: '#6F7885',
     fontSize: '11px',
     marginTop: '8px',
     textAlign: 'center'
   },
   button: {
     width: '100%',
-    padding: '12px',
+    padding: '13px',
     border: 'none',
-    borderRadius: '10px',
+    borderRadius: '11px',
     fontSize: '14px',
-    fontWeight: '700',
-    letterSpacing: '0.5px',
+    fontWeight: '800',
+    letterSpacing: '1px',
     cursor: 'pointer'
   },
   installButton: {
-    background: '#22c55e',
-    color: '#000000'
+    background: '#D71920',
+    color: '#FFFFFF'
   },
   uninstallButton: {
-    background: '#24312a',
+    background: '#2A1115',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#D71920',
     color: '#ffffff'
   },
   disabledButton: {
-    background: '#1b2620',
-    color: '#5c6b62',
+    background: '#181C24',
+    color: '#6F7885',
     cursor: 'not-allowed'
   },
   error: {

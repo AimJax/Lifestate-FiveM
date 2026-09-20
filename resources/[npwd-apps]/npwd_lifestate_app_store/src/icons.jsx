@@ -64,8 +64,19 @@ const customer = (props) =>
     xmlns: 'http://www.w3.org/2000/svg'
   }, lajuPolygons(false))
 
-// Generic store glyph (also the store's own icon).
-const store = filled('M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z')
+// Lifestate App Store (npwd_lifestate_app_store): "L" of rounded app tiles,
+// white column with a LAJU-red foot cell. Explicit ink so the store tile
+// matches the home-screen icon exactly.
+const store = (props) =>
+  React.createElement('svg', {
+    ...props,
+    viewBox: '0 0 24 24',
+    xmlns: 'http://www.w3.org/2000/svg'
+  }, [
+    React.createElement('rect', { x: 4, y: 4, width: 7, height: 7, rx: 2, fill: '#FFFFFF', key: 0 }),
+    React.createElement('rect', { x: 4, y: 13, width: 7, height: 7, rx: 2, fill: '#FFFFFF', key: 1 }),
+    React.createElement('rect', { x: 13, y: 13, width: 7, height: 7, rx: 2, fill: '#D71920', key: 2 }),
+  ])
 
 // NPWD built-in MATCH -> "Favorite" (icons/material/svg/MATCH.tsx)
 const matchmaker = filled('m12 21.35-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z')

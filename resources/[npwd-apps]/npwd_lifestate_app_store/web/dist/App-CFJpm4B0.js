@@ -66,7 +66,15 @@ const customer = (props) => React$1.createElement("svg", {
   fill: "currentColor",
   xmlns: "http://www.w3.org/2000/svg"
 }, lajuPolygons(false));
-const store = filled("M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z");
+const store = (props) => React$1.createElement("svg", {
+  ...props,
+  viewBox: "0 0 24 24",
+  xmlns: "http://www.w3.org/2000/svg"
+}, [
+  React$1.createElement("rect", { x: 4, y: 4, width: 7, height: 7, rx: 2, fill: "#FFFFFF", key: 0 }),
+  React$1.createElement("rect", { x: 4, y: 13, width: 7, height: 7, rx: 2, fill: "#FFFFFF", key: 1 }),
+  React$1.createElement("rect", { x: 13, y: 13, width: 7, height: 7, rx: 2, fill: "#D71920", key: 2 })
+]);
 const matchmaker = filled("m12 21.35-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z");
 const irc = filled("M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z");
 const social = stroked(
@@ -248,7 +256,9 @@ function App() {
   const apps = store2 && Array.isArray(store2.apps) ? store2.apps : null;
   const selectedEntry = apps && selected ? apps.find((entry) => entry.id === selected) || null : null;
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.container, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.app, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.title, children: "LIFESTATE APP STORE" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.brandBar }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.eyebrow, children: "LIFESTATE" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.title, children: "APP STORE" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.subtitle, children: "Aplikasi resmi untuk HP kamu" }),
     loading && !apps && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.hint, children: "Memuat..." }),
     !loading && !apps && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -272,7 +282,7 @@ function App() {
 }
 const styles = {
   container: {
-    background: "#0f1512",
+    background: "#0B0D12",
     color: "#ffffff",
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     width: "100%",
@@ -288,31 +298,47 @@ const styles = {
   app: {
     width: "100%",
     maxWidth: "380px",
-    background: "#16201b",
+    background: "#12151C",
+    border: "1px solid #1E232D",
     borderRadius: "16px",
     padding: "20px",
     boxSizing: "border-box",
     boxShadow: "0 8px 32px rgba(0,0,0,0.4)"
   },
+  brandBar: {
+    width: "28px",
+    height: "3px",
+    borderRadius: "2px",
+    background: "#D71920",
+    marginBottom: "12px"
+  },
+  eyebrow: {
+    color: "#6F7885",
+    fontSize: "11px",
+    fontWeight: "700",
+    letterSpacing: "3px",
+    marginBottom: "2px"
+  },
   title: {
     fontSize: "20px",
-    fontWeight: "700",
+    fontWeight: "800",
     letterSpacing: "1px"
   },
   subtitle: {
-    color: "#8b978f",
+    color: "#9AA3AF",
     fontSize: "12px",
+    marginTop: "4px",
     marginBottom: "18px"
   },
   hint: {
-    color: "#8b978f",
+    color: "#9AA3AF",
     fontSize: "13px",
     marginBottom: "14px"
   },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(3, 1fr)",
-    gap: "10px"
+    gap: "12px"
   },
   tile: {
     position: "relative",
@@ -320,11 +346,13 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     gap: "8px",
-    padding: "12px 6px",
-    background: "#111815",
+    padding: "14px 6px 12px",
+    minHeight: "118px",
+    boxSizing: "border-box",
+    background: "#181C24",
     borderWidth: "1px",
     borderStyle: "solid",
-    borderColor: "#24312a",
+    borderColor: "#292F3A",
     borderRadius: "14px",
     cursor: "pointer",
     color: "#ffffff",
@@ -340,26 +368,27 @@ const styles = {
     color: "#ffffff"
   },
   tileName: {
-    fontSize: "11px",
+    fontSize: "12px",
     fontWeight: "600",
-    lineHeight: "13px",
+    lineHeight: "14px",
     textAlign: "center",
     wordBreak: "break-word"
   },
   tileDot: {
     position: "absolute",
-    top: "8px",
-    right: "8px",
-    width: "12px",
-    height: "12px",
+    top: "10px",
+    right: "10px",
+    width: "10px",
+    height: "10px",
     borderRadius: "6px",
     boxSizing: "border-box"
   },
   tileDotInstalled: {
-    background: "#22c55e"
+    background: "#22c55e",
+    border: "2px solid #12151C"
   },
   tileDotLocked: {
-    background: "#1b2620",
+    background: "#1E232D",
     border: "1px solid #f59e0b",
     color: "#f59e0b",
     fontSize: "9px",
@@ -372,8 +401,9 @@ const styles = {
   back: {
     background: "none",
     border: "none",
-    color: "#8b978f",
+    color: "#9AA3AF",
     fontSize: "12px",
+    fontWeight: "600",
     padding: "0 0 14px 0",
     cursor: "pointer",
     font: "inherit"
@@ -381,14 +411,14 @@ const styles = {
   detailHeader: {
     display: "flex",
     alignItems: "center",
-    gap: "14px",
-    marginBottom: "14px"
+    gap: "16px",
+    marginBottom: "16px"
   },
   detailIcon: {
-    width: "68px",
-    height: "68px",
+    width: "76px",
+    height: "76px",
     flexShrink: 0,
-    borderRadius: "18px",
+    borderRadius: "20px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -399,47 +429,58 @@ const styles = {
     minWidth: 0
   },
   detailName: {
-    fontSize: "17px",
-    fontWeight: "700"
+    fontSize: "19px",
+    fontWeight: "800",
+    letterSpacing: "0.5px"
   },
   detailState: {
-    color: "#8b978f",
-    fontSize: "12px",
+    color: "#9AA3AF",
+    fontSize: "11px",
+    fontWeight: "700",
+    letterSpacing: "1px",
+    textTransform: "uppercase",
     marginTop: "4px"
   },
   detailDescription: {
+    background: "#181C24",
+    border: "1px solid #292F3A",
+    borderRadius: "12px",
+    padding: "14px",
     color: "#c9d3cc",
     fontSize: "13px",
-    lineHeight: "19px",
+    lineHeight: "20px",
     marginBottom: "16px"
   },
   detailHint: {
-    color: "#8b978f",
+    color: "#6F7885",
     fontSize: "11px",
     marginTop: "8px",
     textAlign: "center"
   },
   button: {
     width: "100%",
-    padding: "12px",
+    padding: "13px",
     border: "none",
-    borderRadius: "10px",
+    borderRadius: "11px",
     fontSize: "14px",
-    fontWeight: "700",
-    letterSpacing: "0.5px",
+    fontWeight: "800",
+    letterSpacing: "1px",
     cursor: "pointer"
   },
   installButton: {
-    background: "#22c55e",
-    color: "#000000"
+    background: "#D71920",
+    color: "#FFFFFF"
   },
   uninstallButton: {
-    background: "#24312a",
+    background: "#2A1115",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "#D71920",
     color: "#ffffff"
   },
   disabledButton: {
-    background: "#1b2620",
-    color: "#5c6b62",
+    background: "#181C24",
+    color: "#6F7885",
     cursor: "not-allowed"
   },
   error: {
