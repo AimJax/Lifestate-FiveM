@@ -569,7 +569,7 @@ index 2e4cb99b..c9a05b1b 100644
  };
  
 diff --git a/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx b/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx
-index 5f62bbb4..b062d7b1 100644
+index 5f62bbb4..e485daa7 100644
 --- a/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx
 +++ b/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx
 @@ -10,7 +10,7 @@ import { useMyPhoneNumber } from '@os/simcard/hooks/useMyPhoneNumber';
@@ -581,7 +581,7 @@ index 5f62bbb4..b062d7b1 100644
  
  export const DialerHistory: React.FC = () => {
    const myNumber = useMyPhoneNumber();
-@@ -35,16 +35,37 @@ export const DialerHistory: React.FC = () => {
+@@ -35,16 +35,38 @@ export const DialerHistory: React.FC = () => {
    if (!calls?.length) {
      return (
        <Box display="flex" justifyContent="center" alignItems="center" paddingTop={35}>
@@ -602,6 +602,7 @@ index 5f62bbb4..b062d7b1 100644
 +        alignItems="center"
 +        paddingTop={10}
 +        textAlign="center"
++        sx={{ transform: 'translateY(-50px)' }}
 +      >
 +        <Box
 +          sx={{
