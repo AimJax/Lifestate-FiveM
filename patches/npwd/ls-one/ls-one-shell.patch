@@ -1,37 +1,54 @@
 diff --git a/apps/phone/src/Phone.css b/apps/phone/src/Phone.css
-index c2a1ec5..b72b904 100644
+index c2a1ec57..5b0d6b35 100644
 --- a/apps/phone/src/Phone.css
 +++ b/apps/phone/src/Phone.css
-@@ -18,22 +18,61 @@
-   width: 500px;
-   height: 1000px;
+@@ -7,37 +7,78 @@
+ .Phone {
+   position: absolute;
+   right: 0;
+-  width: 500px;
+-  height: 1000px;
++  width: 440px;
++  height: 860px;
+   background-size: cover;
+ }
+ 
+ .PhoneFrame {
+   position: absolute;
+   z-index: 999;
+-  width: 500px;
+-  height: 1000px;
++  width: 440px;
++  height: 860px;
    pointer-events: none;
 +  /* LS One: CSS graphite frame replaces the PNG handset image. */
 +  background-image: linear-gradient(#D71920, #D71920) !important;
-+  background-size: 3px 44px;
++  background-size: 3px 40px;
 +  background-repeat: no-repeat;
-+  background-position: calc(100% - 1px) 220px;
++  background-position: calc(100% - 1px) 190px;
 +  background-color: transparent;
-+  border-radius: 64px;
++  border-radius: 56px;
 +  border: 2px solid #282B31;
 +  box-shadow:
-+    inset 0 0 0 10px #111317,
-+    inset 0 0 0 11px #282B31,
-+    inset 0 0 0 21px #08090B,
++    inset 0 0 0 9px #111317,
++    inset 0 0 0 10px #282B31,
++    inset 0 0 0 19px #08090B,
 +    0 24px 80px rgba(0, 0, 0, 0.55);
 +}
 +
-+/* LS One punch-hole camera: tiny, centered, overlapping the display edge. */
++/* LS One punch-hole camera: small, centered, ringed so it reads on dark
++   wallpapers instead of vanishing into them. */
 +.PhoneFrame::before {
 +  content: '';
 +  position: absolute;
-+  top: 11px;
++  top: 10px;
 +  left: 50%;
-+  width: 7px;
-+  height: 7px;
-+  margin-left: -3.5px;
++  width: 9px;
++  height: 9px;
++  margin-left: -4.5px;
 +  border-radius: 50%;
 +  background: radial-gradient(circle at 35% 35%, #23262b 0%, #000000 70%);
++  box-shadow: 0 0 0 1.5px #2a2e35, 0 0 6px rgba(0, 0, 0, 0.8);
 +}
 +
 +/* LS One earpiece slit: subtle, in the top bezel. */
@@ -65,12 +82,17 @@ index c2a1ec5..b72b904 100644
    background-size: cover;
    background-repeat: no-repeat;
 -  border-radius: 20px;
-+  border-radius: 44px;
++  border-radius: 40px;
  }
  
  .PhoneAppContainer {
+-  height: 90%;
++  height: 100%;
+   width: 100%;
+   display: flex;
+   flex-direction: column;
 diff --git a/apps/phone/src/apps/home/components/Home.tsx b/apps/phone/src/apps/home/components/Home.tsx
-index 40d749e..0453f4e 100644
+index 40d749e9..0453f4e5 100644
 --- a/apps/phone/src/apps/home/components/Home.tsx
 +++ b/apps/phone/src/apps/home/components/Home.tsx
 @@ -10,7 +10,7 @@ export const HomeApp: React.FC = () => {
@@ -83,46 +105,55 @@ index 40d749e..0453f4e 100644
        </Box>
  
 diff --git a/apps/phone/src/os/navigation-bar/components/Navigation.tsx b/apps/phone/src/os/navigation-bar/components/Navigation.tsx
-index ef3d27c..4dfcacf 100644
+index ef3d27c1..c116b2df 100644
 --- a/apps/phone/src/os/navigation-bar/components/Navigation.tsx
 +++ b/apps/phone/src/os/navigation-bar/components/Navigation.tsx
-@@ -1,7 +1,7 @@
+@@ -1,35 +1,24 @@
  import React from 'react';
  import { useHistory, useRouteMatch } from 'react-router-dom';
- import { usePhone } from '@os/phone/hooks/usePhone';
+-import { usePhone } from '@os/phone/hooks/usePhone';
 -import { ChevronLeft, Circle, LayoutGrid } from 'lucide-react';
-+import { ChevronLeft, Circle } from 'lucide-react';
  
  export const Navigation: React.FC = () => {
    const history = useHistory();
-@@ -18,16 +18,18 @@ export const Navigation: React.FC = () => {
+   const { isExact } = useRouteMatch('/');
+-  const { closePhone } = usePhone();
+-
+-  const handleGoBackInHistory = () => {
+-    history.goBack();
+-  };
+ 
+   const handleGoToMenu = () => {
+     if (isExact) return;
++    // Home only: the gesture pill is the single visible control. Back
++    // navigation lives in per-app headers; closing uses the phone toggle.
+     history.push('/');
    };
  
    return (
 -    <div className="bg-neutral-100 dark:bg-neutral-900 w-full h-14 px-12">
-+    /* LS One gesture bar: transparent, centered home pill. Back/close keep
-+       their exact behavior as compact edge targets. */
-+    <div className="w-full h-12 px-8 relative" style={{ background: 'transparent' }}>
-       <div className="flex justify-between items-center h-full">
+-      <div className="flex justify-between items-center h-full">
 -        <button onClick={handleGoToMenu}>
 -          <LayoutGrid className="text-neutral-400 hover:dark:text-neutral-100 h-6 w-6 hover:text-neutral-900 " />
-+        <button onClick={handleGoBackInHistory} aria-label="Back">
-+          <ChevronLeft className="text-neutral-500 hover:text-neutral-100 h-5 w-5" />
-         </button>
+-        </button>
 -        <button onClick={closePhone}>
 -          <Circle className="text-neutral-400 hover:dark:text-neutral-100 h-6 w-6 hover:text-neutral-900 " />
-+        <button onClick={handleGoToMenu} aria-label="Home">
-+          <span className="block h-1 w-11 rounded-full bg-white/85" />
-         </button>
+-        </button>
 -        <button onClick={handleGoBackInHistory}>
 -          <ChevronLeft className="text-neutral-400 hover:dark:text-neutral-100 hover:text-neutral-900 h-6 w-6" />
-+        <button onClick={closePhone} aria-label="Close">
-+          <Circle className="text-neutral-500 hover:text-neutral-100 h-5 w-5" />
-         </button>
-       </div>
+-        </button>
+-      </div>
++    /* LS One gesture bar: one floating pill, no bar background, no legacy
++       buttons. Overlays the content safe-area; pointer events only on it. */
++    <div className="absolute bottom-2 left-0 right-0 z-50 flex justify-center pointer-events-none">
++      <button onClick={handleGoToMenu} aria-label="Home" className="pointer-events-auto px-6 py-2">
++        <span className="block h-1 w-11 rounded-full bg-white/85" />
++      </button>
      </div>
+   );
+ };
 diff --git a/apps/phone/src/os/new-notifications/components/NotificationBar.tsx b/apps/phone/src/os/new-notifications/components/NotificationBar.tsx
-index f8abbec..2beeded 100644
+index f8abbec5..2beedede 100644
 --- a/apps/phone/src/os/new-notifications/components/NotificationBar.tsx
 +++ b/apps/phone/src/os/new-notifications/components/NotificationBar.tsx
 @@ -39,8 +39,8 @@ const useStyles = makeStyles((theme) => ({
