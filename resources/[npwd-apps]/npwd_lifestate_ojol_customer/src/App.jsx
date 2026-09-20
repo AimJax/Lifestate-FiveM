@@ -423,7 +423,7 @@ function App() {
     screen = (
       <>
         <div style={styles.hint}>
-          Buka peta GTA, pasang waypoint di tujuan, lalu kembali ke aplikasi ini.
+          Pasang waypoint di peta, lalu kembali ke aplikasi ini.
         </div>
 
         <button style={{ ...styles.button, ...styles.secondaryButton }} disabled={busy} onClick={loadPreview}>

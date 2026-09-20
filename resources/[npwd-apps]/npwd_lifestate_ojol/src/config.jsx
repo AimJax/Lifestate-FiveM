@@ -13,7 +13,7 @@ const MITRA_BADGE = '17.5,3.5 20,6 17.5,8.5 15,6'
 // Expanded home-screen viewBox (internal padding) so the mark occupies the
 // same fraction of the NPWD home tile as it does of the App Store tile.
 // Geometry untouched - verified side-by-side against the store version.
-const HOME_VIEWBOX = '-3 -3 30 30'
+const HOME_VIEWBOX = '-5 -5 34 34'
 
 const Icon = (props) => (
   <svg

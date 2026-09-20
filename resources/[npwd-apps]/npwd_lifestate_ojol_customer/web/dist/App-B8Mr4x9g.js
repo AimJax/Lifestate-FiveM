@@ -346,7 +346,7 @@ function App() {
     ] });
   } else {
     screen = /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.hint, children: "Buka peta GTA, pasang waypoint di tujuan, lalu kembali ke aplikasi ini." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: styles.hint, children: "Pasang waypoint di peta, lalu kembali ke aplikasi ini." }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { style: { ...styles.button, ...styles.secondaryButton }, disabled: busy, onClick: loadPreview, children: "GUNAKAN WAYPOINT" }),
       preview ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: styles.card, children: [

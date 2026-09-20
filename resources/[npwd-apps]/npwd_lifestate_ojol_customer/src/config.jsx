@@ -14,7 +14,7 @@ const path = '/npwd_lifestate_ojol_customer'
 // tile that the mark occupies the same fraction of the tile.
 const LAJU_STEM = '3,3 8,3 8,15 3,15'
 const LAJU_FOOT = '3,15 13,15 18.5,17.5 13,20 3,20'
-const HOME_VIEWBOX = '-3 -3 30 30'
+const HOME_VIEWBOX = '-5 -5 34 34'
 
 const Icon = (props) => (
   <svg
