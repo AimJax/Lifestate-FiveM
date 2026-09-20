@@ -1,7 +1,7 @@
 import { importShared } from "./__federation_fn_import-eda1j03z.js";
-import { A as App } from "./App-B3ig4WJ-.js";
+import { A as App } from "./App-q1oDjBE9.js";
 const React = await importShared("react");
-const path = "/npwd_lifestate_ojol_customer";
+const path = "/npwd_lifestate_app_store";
 const Icon = (props) => React.createElement(
   "svg",
   {
@@ -10,7 +10,9 @@ const Icon = (props) => React.createElement(
     fill: "currentColor",
     xmlns: "http://www.w3.org/2000/svg"
   },
-  React.createElement("path", { d: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" })
+  React.createElement("path", {
+    d: "M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"
+  })
 );
 const NotificationIcon = (props) => React.createElement(
   "svg",
@@ -20,13 +22,15 @@ const NotificationIcon = (props) => React.createElement(
     fill: "currentColor",
     xmlns: "http://www.w3.org/2000/svg"
   },
-  React.createElement("path", { d: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" })
+  React.createElement("path", {
+    d: "M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"
+  })
 );
 const config = () => ({
-  id: "npwd_lifestate_ojol_customer",
-  nameLocale: "LAJU",
+  id: "npwd_lifestate_app_store",
+  nameLocale: "Lifestate App Store",
   color: "#ffffff",
-  backgroundColor: "#16201b",
+  backgroundColor: "#1b2440",
   path,
   icon: Icon,
   app: App,

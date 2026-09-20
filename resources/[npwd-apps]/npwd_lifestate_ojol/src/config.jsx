@@ -3,31 +3,44 @@ import App from './App'
 
 const path = '/npwd_lifestate_ojol'
 
-const Icon = (props) =>
-  React.createElement('svg', {
-    ...props,
-    viewBox: '0 0 24 24',
-    fill: 'currentColor',
-    xmlns: 'http://www.w3.org/2000/svg'
-  },
-    React.createElement('path', { d: 'M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.83 0-1.5.67-1.5 1.5S5.67 8 6.5 8h1.84L6 13l-2 1 1 1 2-1v1c0 .83.67 1.5 1.5 1.5h1c.83 0 1.5-.67 1.5-1.5v-1h4v1c0 .83.67 1.5 1.5 1.5h1c.83 0 1.5-.67 1.5-1.5v-1l1-1-1-1-2 1-1.16-3.99c.34-.29.56-.7.56-1.15 0-.83-.67-1.5-1.5-1.5zm-1.5 8.5h-1v-3h1v3zm-10-6h1.5v3h-1.5v-3zm11.5 6.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z' })
-  )
+// Same LAJU mark as the customer app (one brand, two roles). The Mitra
+// distinction is a single small diamond badge - no second logo, no words.
+// Monochrome: rendered in `currentColor` so NPWD/store tiles decide the ink.
+const LAJU_STEM = '3,3 8,3 8,15 3,15'
+const LAJU_FOOT = '3,15 13,15 18.5,17.5 13,20 3,20'
+const MITRA_BADGE = '17.5,3.5 20,6 17.5,8.5 15,6'
 
-const NotificationIcon = (props) =>
-  React.createElement('svg', {
-    ...props,
-    viewBox: '0 0 24 24',
-    fill: 'currentColor',
-    xmlns: 'http://www.w3.org/2000/svg'
-  },
-    React.createElement('path', { d: 'M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.83 0-1.5.67-1.5 1.5S5.67 8 6.5 8h1.84L6 13l-2 1 1 1 2-1v1c0 .83.67 1.5 1.5 1.5h1c.83 0 1.5-.67 1.5-1.5v-1h4v1c0 .83.67 1.5 1.5 1.5h1c.83 0 1.5-.67 1.5-1.5v-1l1-1-1-1-2 1-1.16-3.99c.34-.29.56-.7.56-1.15 0-.83-.67-1.5-1.5-1.5zm-1.5 8.5h-1v-3h1v3zm-10-6h1.5v3h-1.5v-3zm11.5 6.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z' })
-  )
+const Icon = (props) => (
+  <svg
+    {...props}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <polygon points={LAJU_STEM} />
+    <polygon points={LAJU_FOOT} />
+    <polygon points={MITRA_BADGE} />
+  </svg>
+)
+
+const NotificationIcon = (props) => (
+  <svg
+    {...props}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <polygon points={LAJU_STEM} />
+    <polygon points={LAJU_FOOT} />
+    <polygon points={MITRA_BADGE} />
+  </svg>
+)
 
 const config = () => ({
   id: 'npwd_lifestate_ojol',
   nameLocale: 'LAJU Mitra',
-  color: '#ffffff',
-  backgroundColor: '#333333',
+  color: '#D71920',
+  backgroundColor: '#FFFFFF',
   path,
   icon: Icon,
   app: App,

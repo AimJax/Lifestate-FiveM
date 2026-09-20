@@ -605,8 +605,8 @@ const styles = {
     marginBottom: "10px"
   },
   primaryButton: {
-    background: "#22c55e",
-    color: "#000000"
+    background: "#D71920",
+    color: "#FFFFFF"
   },
   secondaryButton: {
     background: "#24312a",

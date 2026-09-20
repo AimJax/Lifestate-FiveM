@@ -1,6 +1,6 @@
 import React from 'react'
 
-// Real icons, copied verbatim from NPWD's own bundles and from each Ojol app's
+// Real icons, copied verbatim from NPWD's own bundles and from each LAJU app's
 // NPWD `config.jsx`, so the store and the home screen show the same glyph.
 // Presentation only - nothing here decides visibility.
 //
@@ -8,8 +8,22 @@ import React from 'react'
 // falls back to the generic store glyph.
 //
 // NPWD mixes two icon styles, so both are supported: the MUI-style filled glyphs
-// (Ojol, Matchmaker, IRC, Marketplace) and the Lucide-style stroked glyphs
+// (Matchmaker, IRC, Marketplace) and the Lucide-style stroked glyphs
 // (Social), which is how NPWD itself renders them.
+//
+// LAJU mark geometry (shared by both LAJU apps - one brand, two roles):
+const LAJU_STEM = '3,3 8,3 8,15 3,15'
+const LAJU_FOOT = '3,15 13,15 18.5,17.5 13,20 3,20'
+const MITRA_BADGE = '17.5,3.5 20,6 17.5,8.5 15,6'
+
+const lajuPolygons = (withBadge) => {
+  const shapes = [
+    React.createElement('polygon', { points: LAJU_STEM, key: 0 }),
+    React.createElement('polygon', { points: LAJU_FOOT, key: 1 }),
+  ]
+  if (withBadge) shapes.push(React.createElement('polygon', { points: MITRA_BADGE, key: 2 }))
+  return shapes
+}
 
 const svg = (props, paths) =>
   React.createElement('svg', {
@@ -31,11 +45,24 @@ const stroked = (...paths) => (props) =>
     strokeLinejoin: 'round'
   }, paths)
 
-// Ojol Driver (npwd_lifestate_ojol)
-const driver = filled('M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.83 0-1.5.67-1.5 1.5S5.67 8 6.5 8h1.84L6 13l-2 1 1 1 2-1v1c0 .83.67 1.5 1.5 1.5h1c.83 0 1.5-.67 1.5-1.5v-1h4v1c0 .83.67 1.5 1.5 1.5h1c.83 0 1.5-.67 1.5-1.5v-1l1-1-1-1-2 1-1.16-3.99c.34-.29.56-.7.56-1.15 0-.83-.67-1.5-1.5-1.5zm-1.5 8.5h-1v-3h1v3zm-10-6h1.5v3h-1.5v-3zm11.5 6.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z')
+// LAJU Mitra (npwd_lifestate_ojol): same mark, explicit LAJU-red ink so it
+// reads on the white store tile. The badge is the only distinction.
+const driver = (props) =>
+  React.createElement('svg', {
+    ...props,
+    viewBox: '0 0 24 24',
+    fill: '#D71920',
+    xmlns: 'http://www.w3.org/2000/svg'
+  }, lajuPolygons(true))
 
-// Ojol Customer (npwd_lifestate_ojol_customer)
-const customer = filled('M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z')
+// LAJU customer (npwd_lifestate_ojol_customer): white ink on the red tile.
+const customer = (props) =>
+  React.createElement('svg', {
+    ...props,
+    viewBox: '0 0 24 24',
+    fill: 'currentColor',
+    xmlns: 'http://www.w3.org/2000/svg'
+  }, lajuPolygons(false))
 
 // Generic store glyph (also the store's own icon).
 const store = filled('M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z')
@@ -74,8 +101,8 @@ export const icons = {
 // `backgroundColor`; MARKETPLACE's comes from a palette object that is not
 // statically resolvable in the bundle, so it uses a close match.
 export const accents = {
-  npwd_lifestate_ojol: '#333333',
-  npwd_lifestate_ojol_customer: '#16201b',
+  npwd_lifestate_ojol: '#FFFFFF',
+  npwd_lifestate_ojol_customer: '#D71920',
   npwd_lifestate_app_store: '#1b2440',
   MATCH: '#FE3B73',
   DARKCHAT: '#212121',

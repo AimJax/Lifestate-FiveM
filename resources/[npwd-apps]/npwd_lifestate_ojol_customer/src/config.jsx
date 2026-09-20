@@ -3,31 +3,41 @@ import App from './App'
 
 const path = '/npwd_lifestate_ojol_customer'
 
-const Icon = (props) =>
-  React.createElement('svg', {
-    ...props,
-    viewBox: '0 0 24 24',
-    fill: 'currentColor',
-    xmlns: 'http://www.w3.org/2000/svg'
-  },
-    React.createElement('path', { d: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z' })
-  )
+// LAJU brand mark: a bold geometric "L" whose foot ends in a forward arrow.
+// Two polygons, no cuts, strong silhouette - readable down to ~24 px.
+// Monochrome: rendered in `currentColor` so NPWD/store tiles decide the ink.
+const LAJU_STEM = '3,3 8,3 8,15 3,15'
+const LAJU_FOOT = '3,15 13,15 18.5,17.5 13,20 3,20'
 
-const NotificationIcon = (props) =>
-  React.createElement('svg', {
-    ...props,
-    viewBox: '0 0 24 24',
-    fill: 'currentColor',
-    xmlns: 'http://www.w3.org/2000/svg'
-  },
-    React.createElement('path', { d: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z' })
-  )
+const Icon = (props) => (
+  <svg
+    {...props}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <polygon points={LAJU_STEM} />
+    <polygon points={LAJU_FOOT} />
+  </svg>
+)
+
+const NotificationIcon = (props) => (
+  <svg
+    {...props}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <polygon points={LAJU_STEM} />
+    <polygon points={LAJU_FOOT} />
+  </svg>
+)
 
 const config = () => ({
   id: 'npwd_lifestate_ojol_customer',
   nameLocale: 'LAJU',
-  color: '#ffffff',
-  backgroundColor: '#16201b',
+  color: '#FFFFFF',
+  backgroundColor: '#D71920',
   path,
   icon: Icon,
   app: App,

@@ -377,8 +377,9 @@ const styles = {
     marginBottom: "4px"
   },
   subtitle: {
-    color: "#888888",
+    color: "#D71920",
     fontSize: "12px",
+    fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: "2px",
     marginBottom: "20px"
@@ -538,8 +539,8 @@ const styles = {
     color: "#ffffff"
   },
   onlineButton: {
-    background: "#22c55e",
-    color: "#000000"
+    background: "#D71920",
+    color: "#FFFFFF"
   },
   offlineButton: {
     background: "#ef4444",

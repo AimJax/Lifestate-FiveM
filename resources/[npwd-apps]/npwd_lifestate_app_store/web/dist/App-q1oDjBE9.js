@@ -29,6 +29,17 @@ reactJsxRuntime_production_min.jsxs = q;
 }
 var jsxRuntimeExports = jsxRuntime.exports;
 const React$1 = await importShared("react");
+const LAJU_STEM = "3,3 8,3 8,15 3,15";
+const LAJU_FOOT = "3,15 13,15 18.5,17.5 13,20 3,20";
+const MITRA_BADGE = "17.5,3.5 20,6 17.5,8.5 15,6";
+const lajuPolygons = (withBadge) => {
+  const shapes = [
+    React$1.createElement("polygon", { points: LAJU_STEM, key: 0 }),
+    React$1.createElement("polygon", { points: LAJU_FOOT, key: 1 })
+  ];
+  if (withBadge) shapes.push(React$1.createElement("polygon", { points: MITRA_BADGE, key: 2 }));
+  return shapes;
+};
 const svg = (props, paths) => React$1.createElement("svg", {
   ...props,
   viewBox: "0 0 24 24",
@@ -43,8 +54,18 @@ const stroked = (...paths) => (props) => svg({
   strokeLinecap: "round",
   strokeLinejoin: "round"
 }, paths);
-const driver = filled("M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.83 0-1.5.67-1.5 1.5S5.67 8 6.5 8h1.84L6 13l-2 1 1 1 2-1v1c0 .83.67 1.5 1.5 1.5h1c.83 0 1.5-.67 1.5-1.5v-1h4v1c0 .83.67 1.5 1.5 1.5h1c.83 0 1.5-.67 1.5-1.5v-1l1-1-1-1-2 1-1.16-3.99c.34-.29.56-.7.56-1.15 0-.83-.67-1.5-1.5-1.5zm-1.5 8.5h-1v-3h1v3zm-10-6h1.5v3h-1.5v-3zm11.5 6.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z");
-const customer = filled("M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z");
+const driver = (props) => React$1.createElement("svg", {
+  ...props,
+  viewBox: "0 0 24 24",
+  fill: "#D71920",
+  xmlns: "http://www.w3.org/2000/svg"
+}, lajuPolygons(true));
+const customer = (props) => React$1.createElement("svg", {
+  ...props,
+  viewBox: "0 0 24 24",
+  fill: "currentColor",
+  xmlns: "http://www.w3.org/2000/svg"
+}, lajuPolygons(false));
 const store = filled("M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z");
 const matchmaker = filled("m12 21.35-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z");
 const irc = filled("M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z");
@@ -68,8 +89,8 @@ const icons = {
   __default: store
 };
 const accents = {
-  npwd_lifestate_ojol: "#333333",
-  npwd_lifestate_ojol_customer: "#16201b",
+  npwd_lifestate_ojol: "#FFFFFF",
+  npwd_lifestate_ojol_customer: "#D71920",
   npwd_lifestate_app_store: "#1b2440",
   MATCH: "#FE3B73",
   DARKCHAT: "#212121",
