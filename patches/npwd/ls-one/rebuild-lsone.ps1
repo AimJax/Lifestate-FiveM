@@ -147,7 +147,7 @@ $indexBundle = Get-ChildItem -LiteralPath (Join-Path $BuildHtml 'assets') -Filte
 if (-not $indexBundle) { Fail 'index bundle not found in fresh build' }
 
 Step 're-applying disabledApps bundle patch'
-Assert-Replace $indexBundle 'i=Hg().iconSet.value,t=f6(()=>Ale.map(s=>{' 'i=Hg().iconSet.value,npwdDis=Ve(xi.resourceConfig)?.disabledApps||[],t=f6(()=>Ale.map(s=>{' 'disabledApps/fragment-1'
+Assert-Replace $indexBundle 'i=Hg().iconSet.value,t=g6(()=>Cle.map(s=>{' 'i=Hg().iconSet.value,npwdDis=We(xi.resourceConfig)?.disabledApps||[],t=g6(()=>Cle.map(s=>{' 'disabledApps/fragment-1'
 Assert-Replace $indexBundle 'isDisabled:s.disable}:{' 'isDisabled:s.disable||npwdDis.includes(s.id)}:{' 'disabledApps/fragment-2'
 Assert-Replace $indexBundle 'isDisabled:s.disable}}),[e,i,a])' 'isDisabled:s.disable||npwdDis.includes(s.id)}}),[e,i,a,npwdDis])' 'disabledApps/fragment-3'
 

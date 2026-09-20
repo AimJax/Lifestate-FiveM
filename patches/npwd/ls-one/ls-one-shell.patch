@@ -225,6 +225,401 @@ index c2a1ec57..a78c10fc 100644
  * {
    box-sizing: border-box;
  }
+diff --git a/apps/phone/src/apps/dialer/components/DialPadGrid.tsx b/apps/phone/src/apps/dialer/components/DialPadGrid.tsx
+index 1628d816..ef08002c 100644
+--- a/apps/phone/src/apps/dialer/components/DialPadGrid.tsx
++++ b/apps/phone/src/apps/dialer/components/DialPadGrid.tsx
+@@ -6,8 +6,21 @@ import { DialInputCtx } from '../context/InputContext';
+ 
+ const useStyles = makeStyles((theme: Theme) => ({
+   gridItem: {
+-    fontSize: theme.typography.h5.fontSize,
+-    padding: theme.spacing(2),
++    fontSize: '22px',
++    fontWeight: 600,
++    minWidth: '68px',
++    minHeight: '68px',
++    width: '68px',
++    height: '68px',
++    borderRadius: '50%',
++    padding: 0,
++    margin: '0 auto',
++    display: 'flex',
++    color: '#FFFFFF',
++    backgroundColor: '#1E232D',
++    '&:hover': {
++      backgroundColor: '#292F3A',
++    },
+   },
+ }));
+ 
+@@ -19,8 +32,8 @@ interface ButtonItemProps {
+ const ButtonItem: React.FC<ButtonItemProps> = ({ label, onClick }) => {
+   const classes = useStyles();
+   return (
+-    <Grid key={label} item xs={4}>
+-      <Button fullWidth size="large" className={classes.gridItem} onClick={onClick}>
++    <Grid key={label} item xs={4} style={{ display: 'flex', justifyContent: 'center' }}>
++      <Button size="large" className={classes.gridItem} onClick={onClick}>
+         {label}
+       </Button>
+     </Grid>
+@@ -31,8 +44,8 @@ export const DialGrid = () => {
+   const { add, removeOne, clear } = useContext(DialInputCtx);
+ 
+   return (
+-    <Box height="100%">
+-      <Grid container justifyContent="space-around">
++    <Box height="100%" paddingTop={2} paddingBottom={2}>
++      <Grid container justifyContent="space-around" rowSpacing={1.5}>
+         <ButtonItem label={1} onClick={() => add(1)} />
+         <ButtonItem label={2} onClick={() => add(2)} />
+         <ButtonItem label={3} onClick={() => add(3)} />
+diff --git a/apps/phone/src/apps/dialer/components/DialerApp.tsx b/apps/phone/src/apps/dialer/components/DialerApp.tsx
+index 27ca80d5..4474563c 100644
+--- a/apps/phone/src/apps/dialer/components/DialerApp.tsx
++++ b/apps/phone/src/apps/dialer/components/DialerApp.tsx
+@@ -1,6 +1,7 @@
+ import React from 'react';
+ import { AppWrapper } from '@ui/components';
+ import { AppContent } from '@ui/components/AppContent';
++import { Box } from '@mui/material';
+ import { DialerHistory } from './views/DialerHistory';
+ import { Switch, Route } from 'react-router-dom';
+ import DialPage from './views/DialPage';
+@@ -15,22 +16,31 @@ export const DialerApp: React.FC = () => {
+     <DialerThemeProvider>
+       <AppWrapper>
+         <AppContent>
+-          <Switch>
+-            <Route path="/phone/dial">
+-              <DialPage />
+-            </Route>
+-            <Route exact path="/phone">
++          <Box sx={{ padding: '14px 20px 4px' }}>
++            <Box sx={{ width: '28px', height: '3px', borderRadius: '2px', backgroundColor: '#D71920', marginBottom: '8px' }} />
++            <Box sx={{ color: '#FFFFFF', fontSize: '20px', fontWeight: 800, letterSpacing: '0.5px' }}>
++              Phone
++            </Box>
++          </Box>
++          <DialerNavBar />
++          {/* Bottom clearance belongs to the global gesture pill only. */}
++          <Box sx={{ paddingBottom: '44px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
++            <Switch>
++              <Route path="/phone/dial">
++                <DialPage />
++              </Route>
++              <Route exact path="/phone">
++                <React.Suspense fallback={<LoadingSpinner />}>
++                  <DialerHistory />
++                </React.Suspense>
++              </Route>
+               <React.Suspense fallback={<LoadingSpinner />}>
+-                <DialerHistory />
++                <Route path="/phone/contacts" component={ContactList} />
+               </React.Suspense>
+-            </Route>
+-            <React.Suspense fallback={<LoadingSpinner />}>
+-              <Route path="/phone/contacts" component={ContactList} />
+-            </React.Suspense>
+-          </Switch>
++            </Switch>
++          </Box>
+         </AppContent>
+-        <DialerNavBar />
+       </AppWrapper>
+     </DialerThemeProvider>
+   );
+-};
+\ No newline at end of file
++};
+diff --git a/apps/phone/src/apps/dialer/components/DialerInput.tsx b/apps/phone/src/apps/dialer/components/DialerInput.tsx
+index 521b593c..e06a8e5c 100644
+--- a/apps/phone/src/apps/dialer/components/DialerInput.tsx
++++ b/apps/phone/src/apps/dialer/components/DialerInput.tsx
+@@ -1,5 +1,5 @@
+ import React, { useContext } from 'react';
+-import { Box, IconButton, Paper } from '@mui/material';
++import { Box, IconButton } from '@mui/material';
+ import { Theme } from '@mui/material/styles';
+ import makeStyles from '@mui/styles/makeStyles';
+ import PhoneIcon from '@mui/icons-material/Phone';
+@@ -13,20 +13,51 @@ import { toggleKeys } from '@ui/components/Input';
+ 
+ const useStyles = makeStyles((theme: Theme) => ({
+   root: {
+-    textAlign: 'right',
+-    paddingTop: theme.spacing(3),
+-    paddingBottom: theme.spacing(3),
+-    paddingLeft: theme.spacing(5),
+-    paddingRight: theme.spacing(5),
++    textAlign: 'center',
++    paddingTop: theme.spacing(4),
++    paddingBottom: theme.spacing(2),
++    paddingLeft: theme.spacing(3),
++    paddingRight: theme.spacing(3),
+     display: 'flex',
+-    height: 100,
++    flexDirection: 'column',
++    alignItems: 'center',
++    background: 'transparent',
+   },
+   input: {
+     flex: 1,
+-    fontSize: theme.typography.h6.fontSize,
++    width: '100%',
++    fontSize: '34px',
++    fontWeight: 700,
++    letterSpacing: '2px',
++    color: '#FFFFFF',
++    textAlign: 'center',
++    '& input': {
++      textAlign: 'center',
++    },
++  },
++  actions: {
++    display: 'flex',
++    gap: theme.spacing(3),
++    marginTop: theme.spacing(2),
++    alignItems: 'center',
++    justifyContent: 'center',
++  },
++  callBtn: {
++    padding: 16,
++    backgroundColor: '#22C55E',
++    color: '#FFFFFF',
++    '&:hover': {
++      backgroundColor: '#22C55E',
++      filter: 'brightness(1.1)',
++    },
++    '&.Mui-disabled': {
++      backgroundColor: '#1E232D',
++      color: '#6F7885',
++    },
+   },
+   iconBtn: {
+-    padding: 10,
++    padding: 12,
++    color: '#9AA3AF',
+   },
+ }));
+ 
+@@ -47,32 +78,34 @@ export const DialerInput: React.FC = () => {
+   };
+ 
+   return (
+-    <Box component={Paper} className={classes.root}>
++    <Box className={classes.root}>
+       <InputBase
+         placeholder={t('DIALER.INPUT_PLACEHOLDER')}
+         className={classes.input}
+         value={inputVal}
+         onChange={(e) => set(e.target.value)}
+       />
+-      <IconButton
+-        color="primary"
+-        className={classes.iconBtn}
+-        disabled={inputVal <= ''}
+-        onClick={() => handleCall(inputVal)}
+-        size="large"
+-      >
+-        <PhoneIcon fontSize="large" />
+-      </IconButton>
+-      <IconButton
+-        className={classes.iconBtn}
+-        onClick={() => handleNewContact(inputVal)}
+-        onMouseUp={() => {
+-          toggleKeys(false);
+-        }}
+-        size="large"
+-      >
+-        <PersonAddIcon fontSize="large" />
+-      </IconButton>
++      <div className={classes.actions}>
++        <IconButton
++          className={classes.iconBtn}
++          onClick={() => handleNewContact(inputVal)}
++          onMouseUp={() => {
++            toggleKeys(false);
++          }}
++          size="large"
++        >
++          <PersonAddIcon fontSize="medium" />
++        </IconButton>
++        <IconButton
++          className={classes.callBtn}
++          disabled={inputVal <= ''}
++          onClick={() => handleCall(inputVal)}
++          size="large"
++        >
++          <PhoneIcon fontSize="medium" />
++        </IconButton>
++        <Box width={48} />
++      </div>
+     </Box>
+   );
+ };
+diff --git a/apps/phone/src/apps/dialer/components/DialerNavBar.tsx b/apps/phone/src/apps/dialer/components/DialerNavBar.tsx
+index 2e4cb99b..c9a05b1b 100644
+--- a/apps/phone/src/apps/dialer/components/DialerNavBar.tsx
++++ b/apps/phone/src/apps/dialer/components/DialerNavBar.tsx
+@@ -1,57 +1,58 @@
+-import React, { useState } from 'react';
+-import { BottomNavigation, BottomNavigationAction } from '@mui/material';
++import React from 'react';
+ import { NavLink, useLocation } from 'react-router-dom';
+-import { Theme } from '@mui/material/styles';
+-import makeStyles from '@mui/styles/makeStyles';
+-import PhoneIcon from '@mui/icons-material/Phone';
+-import PersonIcon from '@mui/icons-material/Person';
+-import HistoryIcon from '@mui/icons-material/History';
+-import { useTranslation } from 'react-i18next';
+-import { Contact, History, Phone } from 'lucide-react';
++import { Box } from '@mui/material';
+ 
+-const useStyles = makeStyles((theme: Theme) => ({
+-  root: {
+-    width: '100%',
+-    backgroundColor: theme.palette.background.paper,
+-  },
+-  icon: {
+-    color: theme.palette.primary.main,
+-  },
+-}));
++// LS One top segmented tabs: Riwayat / Panggilan / Kontak. Replaces the
++// legacy bottom bar (which collided with the global gesture pill). Routes
++// and behavior are unchanged - only presentation moved.
++const TABS = [
++  { label: 'Riwayat', to: '/phone', exact: true },
++  { label: 'Panggilan', to: '/phone/dial', exact: false },
++  { label: 'Kontak', to: '/phone/contacts', exact: false },
++];
+ 
+ const DialerNavBar: React.FC = () => {
+-  const classes = useStyles();
+   const { pathname } = useLocation();
+-  const [page, setPage] = useState(pathname);
+-  const [t] = useTranslation();
+ 
+-  const handleChange = (_e, newPage) => {
+-    setPage(newPage);
+-  };
++  const isActive = (to: string, exact: boolean) =>
++    exact ? pathname === to : pathname === to || pathname.startsWith(to + '/');
+ 
+   return (
+-    <BottomNavigation value={page} onChange={handleChange} showLabels className={classes.root}>
+-      <BottomNavigationAction
+-        value="/phone"
+-        component={NavLink}
+-        icon={<History />}
+-        to="/phone"
+-      />
+-      <BottomNavigationAction
+-        value="/phone/dial"
+-        color="secondary"
+-        component={NavLink}
+-        icon={<Phone />}
+-        to="/phone/dial"
+-      />
+-      <BottomNavigationAction
+-        value="/phone/contacts"
+-        color="secondary"
+-        component={NavLink}
+-        icon={<Contact />}
+-        to="/phone/contacts"
+-      />
+-    </BottomNavigation>
++    <Box
++      component="nav"
++      sx={{
++        display: 'flex',
++        gap: '4px',
++        padding: '4px 16px 0',
++        borderBottom: '1px solid #292F3A',
++      }}
++    >
++      {TABS.map((tab) => {
++        const active = isActive(tab.to, tab.exact);
++        return (
++          <Box
++            key={tab.to}
++            component={NavLink}
++            to={tab.to}
++            exact={tab.exact}
++            sx={{
++              flex: 1,
++              textAlign: 'center',
++              textDecoration: 'none',
++              fontSize: '13px',
++              fontWeight: 700,
++              letterSpacing: '0.5px',
++              padding: '10px 4px 12px',
++              color: active ? '#FFFFFF' : '#6F7885',
++              borderBottom: active ? '2px solid #D71920' : '2px solid transparent',
++              marginBottom: '-1px',
++            }}
++          >
++            {tab.label}
++          </Box>
++        );
++      })}
++    </Box>
+   );
+ };
+ 
+diff --git a/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx b/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx
+index 5f62bbb4..dd9a5429 100644
+--- a/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx
++++ b/apps/phone/src/apps/dialer/components/views/DialerHistory.tsx
+@@ -35,16 +35,37 @@ export const DialerHistory: React.FC = () => {
+   if (!calls?.length) {
+     return (
+       <Box display="flex" justifyContent="center" alignItems="center" paddingTop={35}>
+-        <p>
+-          {
+-            <Typography style={{ color: phoneTheme.palette.text.primary }}>
+-              {t('DIALER.NO_HISTORY')}
+-            </Typography>
+-          }
+-          <span role="img" aria-label="sad">
+-            😞
+-          </span>
+-        </p>
++              <Box
++        display="flex"
++        flexDirection="column"
++        justifyContent="center"
++        alignItems="center"
++        paddingTop={10}
++        textAlign="center"
++      >
++        <Box
++          sx={{
++            width: '64px',
++            height: '64px',
++            borderRadius: '18px',
++            backgroundColor: '#181C24',
++            border: '1px solid #292F3A',
++            display: 'flex',
++            alignItems: 'center',
++            justifyContent: 'center',
++            marginBottom: '16px',
++            color: '#6F7885',
++          }}
++        >
++          <History size={28} />
++        </Box>
++        <Typography style={{ color: '#FFFFFF', fontSize: '16px', fontWeight: 700 }}>
++          Belum ada riwayat
++        </Typography>
++        <Typography style={{ color: '#9AA3AF', fontSize: '12px', marginTop: '6px' }}>
++          Panggilan masuk dan keluar akan muncul di sini.
++        </Typography>
++      </Box>
+       </Box>
+     );
+   }
 diff --git a/apps/phone/src/apps/home/components/Home.tsx b/apps/phone/src/apps/home/components/Home.tsx
 index 40d749e9..cb492695 100644
 --- a/apps/phone/src/apps/home/components/Home.tsx
