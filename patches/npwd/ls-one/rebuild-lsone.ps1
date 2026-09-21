@@ -109,7 +109,9 @@ $jsxAuditFiles = @(
   'apps/phone/src/apps/notes/list/NoteList.tsx',
   'apps/phone/src/apps/calculator/components/CalculatorApp.tsx',
   'apps/phone/src/apps/calculator/components/Calculator.tsx',
-  'apps/phone/src/apps/calculator/components/CalculatorButton.tsx'
+  'apps/phone/src/apps/calculator/components/CalculatorButton.tsx',
+  'apps/phone/src/apps/messages/components/list/MessagesList.tsx',
+  'apps/phone/src/apps/contacts/components/List/ContactList.tsx'
 )
 $jsxKnownGlobals = @('React', 'Box', 'Grid', 'Typography', 'Button', 'IconButton', 'Paper', 'Switch', 'Route', 'Link', 'NavLink', 'Suspense', 'Fragment')
 foreach ($rel in $jsxAuditFiles) {
@@ -197,7 +199,7 @@ $indexBundle = Get-ChildItem -LiteralPath (Join-Path $BuildHtml 'assets') -Filte
 if (-not $indexBundle) { Fail 'index bundle not found in fresh build' }
 
 Step 're-applying disabledApps bundle patch'
-Assert-Replace $indexBundle 'i=Wg().iconSet.value,t=h6(()=>Tle.map(s=>{' 'i=Wg().iconSet.value,npwdDis=We(xi.resourceConfig)?.disabledApps||[],t=h6(()=>Tle.map(s=>{' 'disabledApps/fragment-1'
+Assert-Replace $indexBundle 'i=Wg().iconSet.value,t=F6(()=>Ile.map(s=>{' 'i=Wg().iconSet.value,npwdDis=We(xi.resourceConfig)?.disabledApps||[],t=F6(()=>Ile.map(s=>{' 'disabledApps/fragment-1'
 Assert-Replace $indexBundle 'isDisabled:s.disable}:{' 'isDisabled:s.disable||npwdDis.includes(s.id)}:{' 'disabledApps/fragment-2'
 Assert-Replace $indexBundle 'isDisabled:s.disable}}),[e,i,a])' 'isDisabled:s.disable||npwdDis.includes(s.id)}}),[e,i,a,npwdDis])' 'disabledApps/fragment-3'
 

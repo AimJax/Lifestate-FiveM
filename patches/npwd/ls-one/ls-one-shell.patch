@@ -300,10 +300,55 @@ index 2c874cb8..415b2dbd 100644
      >
        {buttonOpts.label}
 diff --git a/apps/phone/src/apps/contacts/components/List/ContactList.tsx b/apps/phone/src/apps/contacts/components/List/ContactList.tsx
-index 3f82a677..b8ee0b27 100644
+index 3f82a677..c0aed6ab 100644
 --- a/apps/phone/src/apps/contacts/components/List/ContactList.tsx
 +++ b/apps/phone/src/apps/contacts/components/List/ContactList.tsx
-@@ -42,7 +42,7 @@ export const ContactList: React.FC = () => {
+@@ -1,4 +1,4 @@
+-import React from 'react';
++import React, { useEffect, useState } from 'react';
+ import { SearchContacts } from './SearchContacts';
+ import { Link, useHistory, useLocation } from 'react-router-dom';
+ import { useFilteredContacts } from '../../hooks/state';
+@@ -19,8 +19,36 @@ import { setClipboard } from "@os/phone/hooks";
+ import { useSnackbar } from '@os/snackbar/hooks/useSnackbar';
+ import fetchNui from "@utils/fetchNui";
+ 
+-export const ContactList: React.FC = () => {
+-  const filteredContacts = useFilteredContacts();
++// Shared avatar with a real runtime fallback: empty URLs and URLs that fail
++// to load both render the LS One fallback circle instead of a broken image.
++// Used by SelfContact and ContactItem alike, so both Contacts views behave
++// identically.
++const ContactAvatar: React.FC<{ src?: string; label: React.ReactNode }> = ({ src, label }) => {
++  const [failed, setFailed] = useState(false);
++
++  useEffect(() => {
++    setFailed(false);
++  }, [src]);
++
++  if (!src || src.length === 0 || failed) {
++    return (
++      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1E232D] border border-[#292F3A]">
++        <span className="text-gray-600 dark:text-gray-300">{label}</span>
++      </div>
++    );
++  }
++
++  return (
++    <img
++      src={src}
++      onError={() => setFailed(true)}
++      className="inline-block h-10 w-10 rounded-full"
++      alt={'avatar'}
++    />
++  );
++};
++
++export const ContactList: React.FC = () => {  const filteredContacts = useFilteredContacts();
+   const history = useHistory();
+ 
+   // FIXME: This should be reduced before being passed to the component
+@@ -42,7 +70,7 @@ export const ContactList: React.FC = () => {
            <SearchContacts />
            <NPWDButton
              size="icon"
@@ -312,7 +357,7 @@ index 3f82a677..b8ee0b27 100644
              variant="ghost"
              onClick={() => history.push('/contacts/-1')}
            >
-@@ -63,7 +63,7 @@ export const ContactList: React.FC = () => {
+@@ -63,7 +91,7 @@ export const ContactList: React.FC = () => {
              .sort()
              .map((letter) => (
                <div key={letter} className="relative">
@@ -321,24 +366,36 @@ index 3f82a677..b8ee0b27 100644
                    <h3>{letter}</h3>
                  </div>
                  <List>
-@@ -110,7 +110,7 @@ const SelfContact = ({number, avatar}: {number: string, avatar:string}) => {
-             {avatar && avatar.length > 0 ? (
-               <img src={avatar} className="inline-block h-10 w-10 rounded-full" alt={'avatar'} />
-             ) : (
+@@ -107,13 +135,7 @@ const SelfContact = ({number, avatar}: {number: string, avatar:string}) => {
+           className="flex items-center justify-between focus:outline-none"
+         >
+           <div className="flex items-center space-x-2">
+-            {avatar && avatar.length > 0 ? (
+-              <img src={avatar} className="inline-block h-10 w-10 rounded-full" alt={'avatar'} />
+-            ) : (
 -              <div className="flex h-10 w-10 items-center justify-center rounded-full">
-+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1E232D] border border-[#292F3A]">
-                 <span className="text-gray-600 dark:text-gray-300">Me</span>
-               </div>
-             )}
-@@ -199,7 +199,7 @@ const ContactItem = ({ number, avatar, id, display }: ContactItemProps) => {
-             {avatar && avatar.length > 0 ? (
-               <img src={avatar} className="inline-block h-10 w-10 rounded-full" alt={'avatar'} />
-             ) : (
+-                <span className="text-gray-600 dark:text-gray-300">Me</span>
+-              </div>
+-            )}
++            <ContactAvatar src={avatar} label="Me" />
+             <div>
+               <p className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                 {t('CONTACTS.MY_NUMBER')}
+@@ -196,13 +218,7 @@ const ContactItem = ({ number, avatar, id, display }: ContactItemProps) => {
+           className="flex items-center justify-between focus:outline-none"
+         >
+           <div className="flex items-center space-x-2">
+-            {avatar && avatar.length > 0 ? (
+-              <img src={avatar} className="inline-block h-10 w-10 rounded-full" alt={'avatar'} />
+-            ) : (
 -              <div className="flex h-10 w-10 items-center justify-center rounded-full">
-+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1E232D] border border-[#292F3A]">
-                 <span className="text-gray-600 dark:text-gray-300">{initials(display)}</span>
-               </div>
-             )}
+-                <span className="text-gray-600 dark:text-gray-300">{initials(display)}</span>
+-              </div>
+-            )}
++            <ContactAvatar src={avatar} label={initials(display)} />
+             <div>
+               <p className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                 {display}
 diff --git a/apps/phone/src/apps/contacts/components/List/SearchContacts.tsx b/apps/phone/src/apps/contacts/components/List/SearchContacts.tsx
 index d7b343ed..b6012baa 100644
 --- a/apps/phone/src/apps/contacts/components/List/SearchContacts.tsx
@@ -984,7 +1041,7 @@ index 54b923db..15c7bd33 100644
        onClick={!isEditing ? onClick : handleDeleteConversations}
        onMouseUp={() => {
 diff --git a/apps/phone/src/apps/messages/components/list/MessagesList.tsx b/apps/phone/src/apps/messages/components/list/MessagesList.tsx
-index 8b79f03a..3a8b3d96 100644
+index 8b79f03a..cda76fe3 100644
 --- a/apps/phone/src/apps/messages/components/list/MessagesList.tsx
 +++ b/apps/phone/src/apps/messages/components/list/MessagesList.tsx
 @@ -15,7 +15,7 @@ import {
@@ -996,12 +1053,18 @@ index 8b79f03a..3a8b3d96 100644
  import {NPWDInput} from "@ui/components";
  import { List } from '@npwd/keyos';
  
-@@ -41,7 +41,41 @@ const MessagesList = (): any => {
+@@ -41,7 +41,47 @@ const MessagesList = (): any => {
          setFilterVal(debouncedVal);
      }, [debouncedVal, setFilterVal]);
  
 -    if (!conversations) return <p>No messages</p>;
-+    if (!conversations) {
++    // Loading state (unresolved upstream data): render nothing yet. The
++    // branded empty state below is strictly for a loaded, empty inbox.
++    if (conversations === undefined) {
++      return null;
++    }
++
++    if (conversations.length === 0) {
 +      return (
 +        <Box
 +          display="flex"
@@ -1039,7 +1102,7 @@ index 8b79f03a..3a8b3d96 100644
  
      const handleClick = (conversation: MessageConversation) => () => {
          setMessageRead(conversation.id);
-@@ -77,8 +111,8 @@ const MessagesList = (): any => {
+@@ -77,8 +117,8 @@ const MessagesList = (): any => {
  
              <div className="w-full py-2 px-4">
                  <div
